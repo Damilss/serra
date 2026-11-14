@@ -444,7 +444,6 @@ serra/
 ├── .clang-format
 ├── .clangd                  # clangd config: arm-none-eabi-gcc, Cortex-M33 flags
 ├── .editorconfig
-├── compile_flags.txt
 ├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md

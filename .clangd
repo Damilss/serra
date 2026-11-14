@@ -8,8 +8,6 @@
 #     --query-driver=**/arm-none-eabi-gcc*
 # (VS Code: "clangd.arguments" setting; Neovim: lspconfig cmd).
 # Don't add --target=... here: gcc rejects it, which breaks --query-driver.
-#
-# Generated with Claude Code Opus 5.5
 
 CompileFlags:
   # Once the Pico SDK CMake build exists, its compile_commands.json is used and the
