@@ -6,6 +6,7 @@
  */
 #include <stdio.h>
 
+#include "audio/listen.h"
 #include "blink_light/blink_light.h"
 #include "mesh/console.h"
 #include "mesh/mesh.h"
@@ -52,11 +53,14 @@ int main(void) {
 		return 1;
 	}
 
-	/* TEMPORARY: serial test commands + fake alerts until audio exists */
+	/* serial test console (a/b/u/p/s/h); its fake-alert beacon starts paused */
 	if (console_init()) {
 		printf("[main] console_init failed\n");
 		return 1;
 	}
+
+	/* core 1: mic + classifier; detections reach the mesh through ipc */
+	listen_start();
 
 	printf("[main] main loop running\n");
 	for (;;) {

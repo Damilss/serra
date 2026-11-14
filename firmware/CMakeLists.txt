@@ -27,8 +27,15 @@ endif()
 
 pico_sdk_init()
 
+# The classifier (TensorFlow Lite Micro + model + features) as the
+# `serra_classifier` library. Needs a pico-tflmicro checkout: see
+# classifier/classifier.cmake (default: a pico-tflmicro folder next to the SDK).
+include(${CMAKE_CURRENT_LIST_DIR}/classifier/classifier.cmake)
+
 add_executable(node
     main.c
+    audio/listen.c
+    audio/mic.c
     blink_light/blink_light.c
     mesh/ble.c
     mesh/mesh.c
@@ -37,12 +44,17 @@ add_executable(node
     runtime/ipc.c
 )
 
+# PIO program for the INMP441 (I2S) -> i2s_mic.pio.h for audio/mic.c.
+pico_generate_pio_header(node ${CMAKE_CURRENT_LIST_DIR}/audio/i2s_mic.pio)
+
 # btstack_config.h lives next to this file; BTstack includes it by name.
 target_include_directories(node PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 
 # Bluetooth only, no IP stack: poll mode defaults to lwIP on, so turn it off.
 target_compile_definitions(node PRIVATE
     CYW43_LWIP=0
+    # core 1 (classifier_init) mallocs while core 0 runs: make malloc safe across cores
+    PICO_USE_MALLOC_MUTEX=1
     # at boot, wait up to 3 s for a serial monitor so the startup log isn't lost
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=3000
     # log every tx-queue switch on serial; noisy, turn off once the mesh is verified
@@ -56,6 +68,10 @@ target_link_libraries(node
     pico_btstack_cyw43     # BTstack transport over the CYW43439
     pico_unique_id         # board ID -> mesh node ID
     pico_rand              # random msg_id seed at boot
+    pico_multicore         # core 1 runs the mic + classifier (audio/listen.c)
+    hardware_pio           # INMP441 I2S capture (audio/mic.c)
+    hardware_dma           # mic samples -> ring buffer without the CPU
+    serra_classifier       # TFLM + int8 model + features (classifier/classifier.cmake)
 )
 
 # printf over USB serial (/dev/cu.usbmodem*), not UART0. Also lets `picotool load -f`

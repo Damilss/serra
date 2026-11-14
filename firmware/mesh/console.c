@@ -33,9 +33,20 @@
  */
 #define TEST_BEACON_PERIOD_MS 5000
 
+/**
+ * TEST_BEACON_ON_AT_BOOT - 1 = the fake-alert beacon starts running
+ *
+ * 0 now that core 1 sends real detections: fake whistles would reach the
+ * base station and dashboard as real alerts. type p on the console to turn
+ * the beacon on for radio-only tests.
+ */
+#ifndef TEST_BEACON_ON_AT_BOOT
+#define TEST_BEACON_ON_AT_BOOT 0
+#endif
+
 static char line[CONSOLE_LINE_MAX];
 static int line_len;
-static bool beacon_on = true;
+static bool beacon_on = TEST_BEACON_ON_AT_BOOT;
 
 /**
  * send_test_alert - send one fake whistle alert
