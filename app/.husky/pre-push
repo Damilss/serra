@@ -2,9 +2,15 @@
 # 1. gitleaks on every commit being pushed.
 # 2. If any of them touch app/: lint, format check and the Playwright E2E tests.
 # Skip once with `git push --no-verify`.
+#
+# All output goes to stderr: VS Code's "Show Command Output" only shows stderr, so a failing
+# check would otherwise look like a bare "failed to push some refs".
+
+exec 1>&2
+export NO_COLOR=1 FORCE_COLOR=0
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "pre-push: node not found on PATH, so the checks can't run." >&2
+  echo "pre-push: node not found on PATH, so the checks can't run."
   exit 1
 fi
 
@@ -19,7 +25,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     range="$remote_sha..$local_sha"
   fi
 
-  node app/scripts/gitleaks.mjs push "$range" || exit 1
+  node app/scripts/gitleaks.mjs push "$range" </dev/null || exit 1
 
   # shellcheck disable=SC2086  # $range is deliberately split into separate git arguments
   if [ -n "$(git log --format= --name-only $range -- app/ | head -n 1)" ]; then
@@ -29,5 +35,8 @@ done
 
 if [ "$app_changed" = 1 ]; then
   echo "pre-push: app/ changed, running lint, format check and E2E tests"
-  cd app && npm run --silent check || exit 1
+  cd app || exit 1
+  npm run --silent lint || { echo "pre-push: ESLint failed (output above). Fix with: cd app && npm run lint:fix"; exit 1; }
+  npm run --silent format:check || { echo "pre-push: Prettier check failed. Fix with: cd app && npm run format"; exit 1; }
+  npx --no-install playwright test --reporter=line </dev/null || { echo "pre-push: E2E tests failed (output above). See: cd app && npx playwright show-report"; exit 1; }
 fi

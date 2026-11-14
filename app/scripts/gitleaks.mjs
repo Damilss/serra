@@ -45,7 +45,7 @@ if (!bin) {
   process.exit(1);
 }
 
-const common = ['--config', config, '--redact', '--no-banner', '--exit-code', '1'];
+const common = ['--config', config, '--redact', '--no-banner', '--no-color', '--exit-code', '1'];
 const args = {
   staged: ['git', '--pre-commit', '--staged', ...common, '.'],
   push: ['git', '--log-opts', range ?? 'HEAD', ...common, '.'],
