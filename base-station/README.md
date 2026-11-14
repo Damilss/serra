@@ -4,7 +4,7 @@ The base station is the **decoder**. It runs on the Raspberry Pi 5, listens to t
 
 Python 3.13, [bleak](https://github.com/hbldh/bleak) and [aiohttp](https://docs.aiohttp.org), managed with [uv](https://docs.astral.sh/uv/).
 
-**Status:** scaffold only. The files exist but are empty; this README is the plan, and the contract `app/` codes against.
+**Status:** bare-bones decoder. `serra-base --source ble|sim` scans (or simulates), decodes, deduplicates and prints one JSON event per line to stdout, with counters on stderr. The SSE server (`/events`, `/health`) and replay are not built yet; the rest of this README is still the plan, and the contract `app/` codes against.
 
 ---
 
@@ -84,14 +84,14 @@ base-station/
 │   ├── __init__.py
 │   ├── __main__.py         # CLI: picks the source, starts the server
 │   ├── protocol.py         # wire format: constants, struct layouts, decode(). Python twin of mesh_pkt_t
-│   ├── dedup.py            # recently-seen cache keyed on (src, msg_id), 60 s expiry
+│   ├── dedup.py            # recently-seen cache keyed on (src, msg_id), expires after 60 s unheard
 │   ├── events.py           # decoded packet -> JSON event (the Pi <-> laptop contract)
 │   ├── server.py           # aiohttp: GET /events (SSE), GET /health
 │   ├── recorder.py         # appends raw advertisements to NDJSON (feeds replay)
 │   └── sources/
 │       ├── __init__.py     # Source interface: async iterator of raw advertisements
 │       ├── ble.py          # bleak scanner, keeps manufacturer data under company 0xFFFF
-│       ├── sim.py          # fake mesh using the node IDs in app/supabase/seed.sql
+│       ├── sim.py          # fake mesh (placeholder node IDs until app/supabase/seed.sql exists)
 │       └── replay.py       # replays a recorded capture with its original timing
 ├── tests/
 │   ├── vectors.json        # golden packets: hex bytes + expected fields
@@ -138,13 +138,13 @@ Each Serranet packet is one legacy BLE advertisement carrying manufacturer-speci
 
 | Constant | Working value | Where it comes from |
 |---|---|---|
-| `MAGIC` | `0x9E` | Dashboard mockup, marked as a placeholder |
+| `MAGIC` | `0x5E` | `firmware/mesh/packet.h` (`MESH_MAGIC`), marked as a placeholder there too |
 | `TYPE_ALERT`, `TYPE_HEARTBEAT` | `1`, `2` | Dashboard mockup |
 | `TTL_INITIAL` | `4` | Supabase schema (`hops = 4 - ttl`) |
 
 **Dropped before decoding:** wrong magic, too short for the header or the payload, unknown `type`. Each case has its own counter in `/health`, and `--record` keeps the raw bytes, so nothing is lost while the firmware is changing.
 
-**Dedup:** the first copy of each `(src, msg_id)` wins; later copies are dropped and counted. Entries expire after 60 seconds, the same window the nodes use, so a node that reboots and reuses a `msg_id` still gets through.
+**Dedup:** the first copy of each `(src, msg_id)` wins; later copies are dropped and counted. An entry expires once 60 seconds pass without a copy of it, the same window the nodes use, so a node that reboots and reuses a `msg_id` still gets through after a minute of quiet. Every copy restarts the 60 s, so a packet that stays on air is dropped for as long as it is heard, not re-emitted every minute. Before dedup, the BLE source also skips an advert whose bytes are identical to the last one from the same address (see [Gotchas](#gotchas)).
 
 ---
 
@@ -159,7 +159,7 @@ A [Server-Sent Events](https://html.spec.whatwg.org/multipage/server-sent-events
 ```
 id: 6f1c2a:1832
 event: packet
-data: {"run_id":"6f1c2a","seq":1832,"t_ms":5123456,"rssi":-66,"raw":"9e4e1cffff1e010101019e5503c089460103", ...}
+data: {"run_id":"6f1c2a","seq":1832,"t_ms":5123456,"rssi":-66,"raw":"5e4e1cffff1e010101019e5503c089460103", ...}
 ```
 
 The `data` line, expanded:
@@ -170,8 +170,8 @@ The `data` line, expanded:
   "seq": 1832,
   "t_ms": 5123456,
   "rssi": -66,
-  "raw": "9e4e1cffff1e010101019e5503c089460103",
-  "magic": 158,
+  "raw": "5e4e1cffff1e010101019e5503c089460103",
+  "magic": 94,
   "src": 7246,
   "dst": 65535,
   "msg_id": 286,
@@ -194,7 +194,7 @@ The `data` line, expanded:
 | `run_id` | Random ID chosen when `serra-base` starts. A new value means `seq` and `t_ms` restarted |
 | `seq` | Event counter for this run, starting at 1 |
 | `t_ms` | Pi monotonic clock, in ms, when the advertisement arrived. Use it for the ~2 s grouping window, never as wall-clock time |
-| `rssi` | Signal strength at the base, in dBm, of the **last hop**, not of the origin node |
+| `rssi` | Signal strength at the base, in dBm, of the **last hop**, not of the origin node. `null` when the radio gave no reading |
 | `raw` | Manufacturer data as received (after the company ID), lowercase hex. Goes into `packets.raw` |
 | `magic` … `type` | Header fields, as in [Input](#input-serranet-packets). `type` is `"ALERT"` or `"HEARTBEAT"` |
 | `hops` | `TTL_INITIAL - ttl` |
@@ -217,7 +217,7 @@ Decoder status as JSON, for the dashboard's boot screen and for checking the set
   "source": "ble",
   "scanner": "up",
   "company_id": 65535,
-  "magic": 158,
+  "magic": 94,
   "uptime_s": 812,
   "clients": 1,
   "counts": {
@@ -237,21 +237,32 @@ Decoder status as JSON, for the dashboard's boot screen and for checking the set
 
 ## Running it
 
-Planned commands, from `base-station/`. Run `uv sync` once first.
+Commands, from `base-station/`. Run `uv sync` once first.
 
-| Where | Command | For |
-|---|---|---|
-| Laptop | `uv run serra-base --source sim` | Building `app/` with no Pi and no Picos: fake alerts and heartbeats from the `seed.sql` nodes |
-| Laptop | `uv run serra-base --source replay captures/sample.ndjson` | Replaying a recorded session, timing included |
-| Pi | `uv run serra-base --source ble --record captures/demo.ndjson` | The real thing (the systemd unit runs this) |
-| Laptop | `uv run serra-base --source ble` | Stage fallback if the Pi fails. Point the ingest at `http://localhost:8080` |
+**Works today:** `uv run serra-base --source sim` and `uv run serra-base --source ble [-v] [--record captures/x.ndjson]`. Both print one JSON event per line (the [event](#output-event-stream) without the SSE framing) to stdout, with counters on stderr. `--source replay`, `--host` and `--port` are planned, along with the server.
 
-| Option | Default | |
-|---|---|---|
-| `--source` | `ble` | `ble`, `sim` or `replay <file>` |
-| `--host` | `0.0.0.0` | Listen address |
-| `--port` | `8080` | Listen port |
-| `--record <file>` | off | Append every advertisement under company `0xFFFF`, **before** decoding, as NDJSON: `{"t_ms": ..., "addr": "...", "rssi": -66, "data": "<hex>"}` |
+| Where | Command | For | |
+|---|---|---|---|
+| Laptop | `uv run serra-base --source sim` | Building `app/` with no Pi and no Picos: fake alerts and heartbeats from three placeholder node IDs (`0x1C4E`, `0x2A10`, `0x3B7F`) until `app/supabase/seed.sql` exists | now |
+| Laptop | `uv run serra-base --source replay captures/sample.ndjson` | Replaying a recorded session, timing included | planned |
+| Pi | `uv run serra-base --source ble --record captures/demo.ndjson` | The real thing (the systemd unit runs this) | now, stdout only |
+| Laptop | `uv run serra-base --source ble` | Stage fallback if the Pi fails. Point the ingest at `http://localhost:8080` | now, stdout only |
+
+| Option | Default | | |
+|---|---|---|---|
+| `--source` | `ble` | `ble`, `sim` or `replay <file>` | `ble`, `sim` now; `replay` planned |
+| `--record <file>` | off | Append every new advertisement under company `0xFFFF` (identical repeats from the same address are skipped), **before** decoding, as NDJSON: `{"t_ms": ..., "addr": "...", "rssi": -66, "data": "<hex>"}` | now |
+| `--magic` | `0x5E` | Magic byte to accept. Override while firmware and decoder disagree | now |
+| `--company-id` | `0xFFFF` | Manufacturer-data company ID to scan for | now |
+| `--verbose`, `-v` | off | More detail on stderr | now |
+| `--seed` | random | `sim` only: seed for a repeatable fake mesh | now |
+| `--interval` | `2.0` | `sim` only: seconds between simulated alerts. Each alert is heard over several paths (2–4 adverts), with an occasional heartbeat or bad-magic advert in between | now |
+| `--host` | `0.0.0.0` | Listen address | planned |
+| `--port` | `8080` | Listen port | planned |
+
+**Testing with a phone:**
+
+- In nRF Connect's advertiser, add manufacturer data with company `0xFFFF` and value `5e4e1cffff1e010101019e5503c089460103` (the [example](#output-event-stream) packet), then run `uv run serra-base --source ble -v`. Change the `msg_id` bytes (bytes 6–7, `1e01`) to see a new event. While the phone keeps advertising the same bytes, no new event appears: repeats from the same address are skipped, and dedup drops the rest for as long as the packet stays on air.
 
 ---
 
@@ -276,7 +287,8 @@ Do this **before the event, with internet**. In gadget mode the Pi has no intern
 ## Gotchas
 
 - **The Pi's clock is wrong.** In gadget mode the Pi has no internet, so no NTP, and the Pi 5's real-time clock only keeps time with a battery fitted. Events therefore carry `t_ms` (Pi monotonic time) for grouping, and the laptop stamps wall-clock time. Never compare a Pi timestamp with a laptop timestamp.
-- **BlueZ reports changes, not every advertisement.** On Linux, bleak goes through BlueZ, which reports when a device's advertising data changes rather than every advertisement. Each new Serranet packet changes the bytes, so floods get through, and a node repeating identical bytes gives one callback, which dedup would drop anyway. Test it early: advertise changing manufacturer data under `0xFFFF` from nRF Connect on a phone and watch `/events`.
+- **The same advertisement is reported more than once.** On Linux, bleak goes through BlueZ and calls back on every change to a device's properties, an RSSI change included, each time with the cached manufacturer data; macOS may report every advertisement. So a node that keeps advertising one packet is seen again and again. `ble.py` skips bytes identical to the last ones from the same address (the same sender repeating the same bytes is the same packet), and dedup drops any other repeat. Each new Serranet packet changes the bytes, so floods get through. Test it early: advertise changing manufacturer data under `0xFFFF` from nRF Connect on a phone and watch `/events`.
+- **Losing Bluetooth mid-scan is silent.** If the adapter is powered off or unplugged, bluetoothd restarts, or macOS Bluetooth is toggled off after scanning starts, bleak raises nothing; adverts just stop. So after 30 s with no callback from any device, `ble.py` restarts the scan. A healthy adapter carries on; a missing one raises, `serra-base` exits 1, and systemd restarts it.
 - **`0xFFFF` isn't ours alone.** It's the Bluetooth SIG's testing ID, so other test devices at a hackathon may use it. The magic byte is what tells our packets apart; watch `bad_magic` in `/health`.
 - **RSSI is the last hop.** The base hears whichever node relayed the packet to it, so `rssi` says nothing about how loud or far away the origin node was. Location comes from `peak_level` in the alerts.
 - **Never block the event loop.** Scanner callbacks, the dedup cache and the SSE server share one asyncio loop. A blocking call stalls the scanner, and advertisements are missed while it waits.
@@ -302,7 +314,7 @@ uv run ruff check        # lint
 
 ## Open items
 
-- [ ] Pin `MAGIC`, the type IDs and `TTL_INITIAL` with firmware, in `protocol.py` and the firmware mesh header at the same time.
+- [ ] Pin `MAGIC`, the type IDs and `TTL_INITIAL` with firmware, in `protocol.py` and the firmware mesh header at the same time. `MAGIC`: firmware (`firmware/mesh/packet.h`) has `0x5E` and the decoder defaults to it, with `--magic` to override; still a placeholder on both sides, so confirm with firmware.
 - [ ] Define the `HEARTBEAT` payload. The Supabase schema expects battery percentage and millivolts from it.
 - [ ] `app/supabase/seed.sql` stores `peak_level` 3100 for 62 dB. On the wire `peak_level` is tenths of a dB, so 62 dB is 620.
 - [ ] Test BlueZ delivery with nRF Connect (see [Gotchas](#gotchas)).
