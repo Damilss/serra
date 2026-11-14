@@ -27,3 +27,5 @@ model/out/
 base-station/captures/*
 !base-station/captures/.gitkeep
 !base-station/captures/sample.ndjson
+# vscode: per-machine settings (extensions.json stays shared)
+.vscode/settings.json

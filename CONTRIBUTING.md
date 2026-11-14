@@ -1,6 +1,6 @@
 # Contributing to Serra
 
-Thanks for helping. Serra is an off-grid search and rescue mesh: Pico 2 W nodes detect distress whistles, screams and shouts of "help" on-device and relay alerts over BLE to a Pi 5 base station. The [README](README.md) covers the what and the why (design decisions, mesh protocol, runtime, classifier). This file covers the how: getting set up, where things go, code style, and getting changes merged.
+Thanks for helping. Serra is an off-grid search and rescue mesh: Pico 2 W nodes detect distress whistles, screams and shouts of "help" on-device and relay alerts over BLE to a base station: a Pi 5 BLE receiver plugged into a laptop over USB, with the database and dashboard on the laptop. The [README](README.md) covers the what and the why (design decisions, mesh protocol, runtime, classifier). This file covers the how: getting set up, where things go, code style, and getting changes merged.
 
 ---
 
@@ -20,7 +20,7 @@ Thanks for helping. Serra is an off-grid search and rescue mesh: Pico 2 W nodes 
 
 ## Project status
 
-**Early firmware.** The node firmware builds on the Pico SDK 2.3.1. `scripts/install-firmware-tooling.sh` installs the toolchain and the SDK, and the SDK's Wi-Fi blink and BLE examples build for the Pico 2 W. Our own `firmware/` CMake build isn't written yet, and `runtime/`, `audio/`, `classifier/` and `mesh/` are empty placeholders. The model and base station have no code yet. See [`firmware/README.md`](firmware/README.md#status) for the detailed status.
+**Early firmware.** The node firmware builds on the Pico SDK 2.3.1. `scripts/install-firmware-tooling.sh` installs the toolchain and the SDK, and the SDK's Wi-Fi blink and BLE examples build for the Pico 2 W. `firmware/CMakeLists.txt` is in place, but our own build isn't finished: `main.c` is empty and `btstack_config.h` doesn't exist yet. `runtime/`, `audio/`, `classifier/` and `mesh/` are empty placeholders. The model and base station have no code yet. See [`firmware/README.md`](firmware/README.md#status) for the detailed status.
 
 - **Looking for something to do?** [Known limitations and open questions](README.md#known-limitations-and-open-questions) and [Future work](README.md#future-work) list what's still open.
 
@@ -34,7 +34,8 @@ The README's repository layout is the plan. Folders marked *planned* don't exist
 |---|---|
 | `firmware/` | Pico 2 W node: C on the Pico SDK 2.3.1, split into `runtime/`, `audio/`, `classifier/` and `mesh/`. Build docs in [`firmware/README.md`](firmware/README.md). |
 | `model/` *(planned)* | Classifier training pipeline (Python, uv) |
-| `base-station/` *(planned)* | Pi 5 BLE listener and map dashboard (Python) |
+| `base-station/` *(planned)* | Pi 5 BLE listener, decoder and dedup (Python); writes alerts to the app's Supabase |
+| `app/` *(planned)* | Laptop-hosted app: Supabase, the map dashboard and the optional local LLM |
 | `docs/` | Longer write-ups: wiring, measurements, protocol notes, diagrams |
 | `docs/refs/` | Reference material: datasheets, papers, specs, grouped by area (`docs/refs/firmware/`). Prefer a link plus notes; only commit a third-party PDF if its license allows redistribution. |
 | `docs/reports/` | Hardware test reports, grouped by area (`docs/reports/firmware/`). One file per session, named `YYYY-MM-DD-<topic>.md`: setup (board, commit, toolchain), commands, raw output, and what it does and doesn't prove. Leave out device-unique IDs such as `chipid`. |
@@ -45,7 +46,7 @@ Adding a new top-level folder? Update the README layout in the same PR.
 **Don't commit:**
 - Audio recordings and datasets (see [Data and recordings](#data-and-recordings)).
 - Build output (`build/`, `*.uf2`, `*.elf`, `*.bin`), virtual environments (`.venv/`) and caches.
-- Wi-Fi credentials (such as the base station's hotspot password) or any other secret.
+- Supabase keys (the `service_role` key especially), Wi-Fi credentials or any other secret. Keep them in an untracked `.env.local`.
 
 ---
 
@@ -73,9 +74,11 @@ The firmware builds on the [Pico SDK](https://github.com/raspberrypi/pico-sdk), 
 - Python and [uv](https://docs.astral.sh/uv/). In `model/`: `uv sync` installs dependencies, `uv run <script>` runs things, `uv add <package>` adds a dependency.
 - Commit both `pyproject.toml` and `uv.lock`.
 
-### Base station (Pi 5)
+### Base station (Pi 5 + laptop)
 
-- A Raspberry Pi 5 with Python, [bleak](https://github.com/hbldh/bleak) and uv (same workflow as `model/`).
+- **Pi 5:** Raspberry Pi OS with Python, [bleak](https://github.com/hbldh/bleak) and uv (same workflow as `model/`), set up for **USB gadget mode** (Ethernet over USB) on its USB-C port.
+- **Laptop:** Docker and the Supabase CLI for the database, plus the dashboard's toolchain. Pull the Supabase images once with internet before the event.
+- Connect them with one USB-C cable (data-capable, not charge-only) from the laptop to the Pi's USB-C port. It carries both power and the network link.
 - Decoder and dashboard work doesn't need the Pi: bleak also runs on a laptop, and a phone running a BLE advertiser app such as nRF Connect can stand in as a node (see [Hardware](README.md#hardware)).
 
 ---

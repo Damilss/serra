@@ -1,6 +1,6 @@
 # Radio range: options for node-to-node links
 
-**Status:** discussion. Nothing here is decided. This expands on [README decision 4](../README.md#4-networking-ble-flooding-not-wi-fi-soft-aps) and the "Range" item under [Known limitations](../README.md#known-limitations-and-open-questions).
+**Status:** decided for the hackathon: we stay on BLE. LoRa is a hypothetical production path and isn't part of the hackathon build. This expands on [README decision 4](../README.md#4-networking-ble-flooding-not-wi-fi-soft-aps) and the "Range" item under [Known limitations](../README.md#known-limitations-and-open-questions).
 
 **The question:** the onboard BLE radio reaches tens of meters per hop. For a wilderness search-and-rescue mesh, wouldn't a different RF link between nodes be better?
 
@@ -60,7 +60,7 @@ What's already in `firmware/CMakeLists.txt`: BTstack over the CYW43439, flooding
 
 **Pros**
 - No extra hardware; works on the boards we have.
-- The Pi 5 hears it with its built-in Bluetooth ([decision 8](../README.md#8-raspberry-pi-5-as-the-base-station)), and a phone running nRF Connect can stand in as a node.
+- The Pi 5 (the base station's receiver, plugged into the laptop) hears it with its built-in Bluetooth ([decision 8](../README.md#8-raspberry-pi-5-as-the-base-station)), and a phone running nRF Connect can stand in as a node.
 - An advertisement is about 0.4 ms on air per channel (*computed*)[^ble-airtime], so collisions are rare and a few ms of flooding jitter is enough.
 - Low current when the scan duty cycle is low[^cyw43439].
 
@@ -198,7 +198,7 @@ Link budgets assume 14 dBm transmit where regulations cap it (EU 868 MHz). Range
 
 ## If we move to LoRa: what changes
 
-The README says the flooding logic "carries over almost unchanged". The logic does; some of the parameters and the setup around it don't.
+This is the hypothetical production path; none of it is planned for the hackathon. The README says the flooding logic "carries over almost unchanged". The logic does; some of the parameters and the setup around it don't.
 
 - **Flooding jitter.** The few-ms random delay in the [flooding rules](../README.md#flooding-rules) works because a BLE advertisement is under 0.4 ms on air[^ble-airtime]. On LoRa the delay has to be on the order of one packet's airtime (tens of ms at SF7, more than a second at SF12)[^toa].
 - **Rebroadcast suppression.** Meshtastic waits and listens before rebroadcasting, and skips its own rebroadcast if another node is already repeating the packet[^meshtastic]. That saves airtime on LoRa, and it would help on BLE too.
@@ -239,19 +239,24 @@ The README says the flooding logic "carries over almost unchanged". The logic do
 
 **For the pitch:** raise the range limit before anyone asks, give one number for today and one for deployment, and show that only the bottom layer changes. The demo already turns transmit power down to force multi-hop in one room ([Demo](../README.md#demo)). That makes it a scale model of a LoRa mesh across a valley, which is a good way to say it.
 
-**For deployment:** LoRa (SX1262) on the region's band, recorded as a new design decision that updates decision 4.
+**For production (hypothetical):** LoRa (SX1262) on the region's band, recorded as a new design decision that updates decision 4.
 
 ---
 
 ## Still to verify
 
+**For the hackathon**
+
 - [ ] Measured BLE range between two Pico 2 Ws: on the ground vs. 1.5 m up, indoors and outdoors.
 - [ ] Node current while scanning at a duty cycle that relays reliably, RP2350 included.
 - [ ] LE feature bits (2M, Coded, extended advertising) on the Pico 2 W and the Pi 5.
 - [ ] Which region's band the pitch quotes (EU 868 or US 915), and that region's current rules.
+
+**For production (hypothetical)**
+
 - [ ] SX1262 sensitivity at the spreading factor we'd use, from Semtech's official datasheet (we only saw a third-party copy).
 - [ ] RFM69HCW sensitivity at a realistic bit rate, from HopeRF's datasheet.
-- [ ] Lead time for LoRa modules, and whether a plug-on Pico board fits with our mic wiring.
+- [ ] Whether a plug-on Pico LoRa board fits with our mic wiring.
 
 ---
 
