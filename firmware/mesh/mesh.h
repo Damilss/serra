@@ -22,7 +22,7 @@
  *
  * call after cyw43_arch_init().
  *
- * return: 0 on success, -1 if BLE failed to start.
+ * return: 0 on success, -1 if BLE or the tx queue failed to start.
  */
 int mesh_init(void);
 
@@ -35,13 +35,13 @@ int mesh_init(void);
 uint16_t mesh_node_id(void);
 
 /**
- * mesh_send_alert - originate an alert and start advertising it
+ * mesh_send_alert - originate an alert and queue it for advertising
  * @alert: the alert; copied
  *
- * stamps a new msg_id and MESH_TTL_DEFAULT. the alert stays on air until
- * the next mesh_send_alert() replaces it.
+ * stamps a new msg_id and MESH_TTL_DEFAULT. the alert takes turns on air
+ * with other queued packets for a few seconds, then is dropped.
  *
- * return: 0 on success, -1 if @alert is NULL.
+ * return: 0 on success, -1 if @alert is NULL or the queue rejected it.
  */
 int mesh_send_alert(const alert_payload_t *alert);
 

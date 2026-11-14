@@ -14,6 +14,7 @@
  */
 #ifndef MESH_BLE_H
 #define MESH_BLE_H
+#include <stdbool.h>
 #include <stdint.h>
 
 /**
@@ -51,5 +52,19 @@ int ble_init(ble_rx_cb_t on_rx);
  * return: 0 on success, -1 if @pkt is NULL or @len is too big.
  */
 int ble_advertise(const void *pkt, uint8_t len);
+
+/**
+ * ble_advertise_stop - turn advertising off
+ *
+ * the next ble_advertise() turns it back on. scanning is not affected.
+ */
+void ble_advertise_stop(void);
+
+/**
+ * ble_advertising - whether advertising is on
+ *
+ * return: true between ble_advertise() and ble_advertise_stop().
+ */
+bool ble_advertising(void);
 
 #endif /* MESH_BLE_H */

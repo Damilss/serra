@@ -197,3 +197,20 @@ int ble_advertise(const void *pkt, uint8_t len) {
 	}
 	return 0;
 }
+
+/**
+ * ble_advertise_stop - turn advertising off
+ */
+void ble_advertise_stop(void) {
+	if (!adv_enabled)
+		return;
+	gap_advertisements_enable(0);
+	adv_enabled = false;
+}
+
+/**
+ * ble_advertising - whether advertising is on
+ *
+ * return: true between ble_advertise() and ble_advertise_stop().
+ */
+bool ble_advertising(void) { return adv_enabled; }

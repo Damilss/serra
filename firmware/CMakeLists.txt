@@ -32,6 +32,7 @@ add_executable(node
     blink_light/blink_light.c
     mesh/ble.c
     mesh/mesh.c
+    mesh/tx_queue.c
 )
 
 # btstack_config.h lives next to this file; BTstack includes it by name.
@@ -42,6 +43,8 @@ target_compile_definitions(node PRIVATE
     CYW43_LWIP=0
     # at boot, wait up to 3 s for a serial monitor so the startup log isn't lost
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=3000
+    # log every tx-queue switch on serial; noisy, turn off once the mesh is verified
+    TXQ_DEBUG=1
 )
 
 target_link_libraries(node

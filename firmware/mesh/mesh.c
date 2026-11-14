@@ -17,6 +17,15 @@
 #include "pico/rand.h"
 #include "pico/time.h"
 #include "pico/unique_id.h"
+#include "tx_queue.h"
+
+/**
+ * MESH_ALERT_LIFETIME_MS - how long an alert we originate stays queued
+ *
+ * long enough for neighbors to catch it through a 50% scan window while it
+ * shares the air with other queued packets. TODO: tune in the demo room.
+ */
+#define MESH_ALERT_LIFETIME_MS 5000
 
 /**
  * MESH_SEEN_SLOTS - how many (src, msg_id) pairs the dedup cache holds
@@ -178,14 +187,16 @@ static void on_ble_rx(const uint8_t *pkt, uint8_t len, int8_t rssi) {
  * msg_id is seeded randomly so a rebooted node doesn't reuse IDs its
  * neighbors still have cached (README "Node IDs and sequence numbers").
  *
- * return: 0 on success, -1 if BLE failed to start.
+ * return: 0 on success, -1 if BLE or the tx queue failed to start.
  */
 int mesh_init(void) {
 	node_id = node_id_from_board();
 	next_msg_id = (uint16_t)get_rand_32();
 	printf("[mesh] node 0x%04x\n", node_id);
 
-	return ble_init(on_ble_rx);
+	if (ble_init(on_ble_rx))
+		return -1;
+	return txq_init();
 }
 
 /**
@@ -196,8 +207,11 @@ int mesh_init(void) {
 uint16_t mesh_node_id(void) { return node_id; }
 
 /**
- * mesh_send_alert - originate an alert and start advertising it
+ * mesh_send_alert - originate an alert and queue it for advertising
  * @alert: the alert; copied
+ *
+ * it goes on air within one queue tick and stays queued for
+ * MESH_ALERT_LIFETIME_MS, taking turns with other queued packets.
  *
  * return: 0 on success, -1 if @alert is NULL.
  */
@@ -217,5 +231,5 @@ int mesh_send_alert(const alert_payload_t *alert) {
 
 	memcpy(buf, &hdr, sizeof(hdr));
 	memcpy(buf + sizeof(hdr), alert, sizeof(*alert));
-	return ble_advertise(buf, sizeof(buf));
+	return txq_push(buf, sizeof(buf), 0, MESH_ALERT_LIFETIME_MS);
 }

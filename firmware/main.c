@@ -40,7 +40,7 @@ static void test_beacon_send(async_context_t *context, async_at_time_worker_t *w
 	};
 
 	mesh_send_alert(&alert);
-	printf("[main] tx node=0x%04x ts=%lu\n", mesh_node_id(), (unsigned long)alert.timestamp);
+	printf("[main] queued node=0x%04x ts=%lu\n", mesh_node_id(), (unsigned long)alert.timestamp);
 	async_context_add_at_time_worker_in_ms(context, worker, TEST_BEACON_PERIOD_MS);
 }
 
