@@ -462,7 +462,7 @@ serra/
 │   ├── cpu-architecture.md  # RISC-V vs. Arm analysis
 │   ├── radio-range-options.md  # BLE vs. other radios for node-to-node range
 │   ├── rp2350-memory-map.md # RP2350 address map and peripheral base addresses
-│   ├── refs/firmware/       # Pico 2 W / RP2350 datasheets, pinout, schematic, guides
+│   ├── refs/firmware/       # Pico 2 W / RP2350 datasheets, pinout, schematic, guides, SDK async_context reference copy
 │   └── reports/firmware/    # hardware test reports, one per session (YYYY-MM-DD-topic.md)
 ├── .vscode/                 # recommended editor extensions
 ├── .clang-format
