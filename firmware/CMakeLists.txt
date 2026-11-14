@@ -44,10 +44,8 @@ target_compile_definitions(node PRIVATE
 target_link_libraries(node
     pico_stdlib            # GPIO, timers, stdio
     pico_cyw43_arch_poll   # radio driver; work happens only when the runtime calls cyw43_arch_poll()
-    # TODO: re-enable for the mesh once firmware/btstack_config.h exists (BTstack won't compile
-    # without it). Disabled for now so the scheduler + blink_light can be tested on hardware.
-    # pico_btstack_ble       # BTstack, LE only
-    # pico_btstack_cyw43     # BTstack transport over the CYW43439
+    pico_btstack_ble       # BTstack, LE only
+    pico_btstack_cyw43     # BTstack transport over the CYW43439
 )
 
 # printf over USB serial (/dev/cu.usbmodem*), not UART0. Also lets `picotool load -f`

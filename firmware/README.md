@@ -29,7 +29,7 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 | INMP441 mic hardware | Headers soldered, ready to wire (pins proposed in [`docs/classifier-interface.md`](../docs/classifier-interface.md#1-microphone-inmp441)); **not yet read by firmware** |
 | BLE advertise test with our packet format | Not started |
 | Our firmware (`node.uf2`): `main.c` + `runtime/scheduler` + `blink_light` | **Runs on a Pico 2 W**: LED toggles every 500 ms, so the scheduler, the build and the CYW43 radio chip all work |
-| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) | **Commented out in `CMakeLists.txt`** until `btstack_config.h` exists; re-enable for the mesh |
+| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Linked and builds; not yet used by our code |
 | `runtime/ipc`, `runtime/node_state`, `audio/`, `classifier/`, `mesh/` | Empty placeholders |
 
 ---
