@@ -80,7 +80,8 @@ add_library(serra_classifier STATIC
     ${MICROFRONTEND_SOURCES}
     ${KISSFFT_SOURCES}
 )
-target_include_directories(serra_classifier PUBLIC ${SERRA_CLASSIFIER_DIR})
+# firmware/ too: classifier.h includes mesh/packet.h for alert_class_t.
+target_include_directories(serra_classifier PUBLIC ${SERRA_CLASSIFIER_DIR} ${SERRA_CLASSIFIER_DIR}/..)
 # The vendored microfrontend comes first so its headers win over any copy in pico-tflmicro.
 target_include_directories(serra_classifier BEFORE PRIVATE
     ${MICROFRONTEND_DIR}

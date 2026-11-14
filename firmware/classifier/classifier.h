@@ -26,22 +26,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* alert_class_t (CLASS_WHISTLE, ...) lives with the wire format it goes into */
+#include "mesh/packet.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * CLASS_WHISTLE - classifier_result_t.class_id for a whistle
- * CLASS_SCREAM - classifier_result_t.class_id for a scream
- * CLASS_HELP - classifier_result_t.class_id for the spoken word "help"
- */
-#define CLASS_WHISTLE 1
-#define CLASS_SCREAM 2
-#define CLASS_HELP 3
-
-/**
  * classifier_result_t - one detected event
- * @class_id: CLASS_WHISTLE, CLASS_SCREAM or CLASS_HELP
+ * @class_id: alert_class_t: CLASS_WHISTLE, CLASS_SCREAM or CLASS_HELP
  * @confidence: 0-255: the model's best score for that class during the event
  * @peak_level: tenths of a dB: loudest moment in dBFS plus the calibration
  *              offset

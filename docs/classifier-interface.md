@@ -46,7 +46,7 @@ The model itself only outputs 5 scores (whistle, scream, help, other_speech, bac
 ```c
 // firmware/classifier/classifier.h (implemented; see the header for the full comments)
 typedef struct {
-    uint8_t class_id;     // CLASS_WHISTLE = 1, CLASS_SCREAM = 2, CLASS_HELP = 3
+    uint8_t class_id;     // alert_class_t (mesh/packet.h): CLASS_WHISTLE = 1, CLASS_SCREAM = 2, CLASS_HELP = 3
     uint8_t confidence;   // 0–255
     int16_t peak_level;   // tenths of a dB: dBFS of the loudest moment + this node's calibration offset
     uint8_t blast_count;  // whistles only (3 = distress pattern), 0 otherwise

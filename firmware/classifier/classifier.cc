@@ -320,6 +320,10 @@ int event_leader() {
  * @out: filled in from the event
  */
 void event_finish(classifier_result_t *out) {
+	/* class_id is the model index + 1; keep that in step with alert_class_t */
+	static_assert(CLASS_WHISTLE == SERRA_MODEL_WHISTLE + 1, "whistle index");
+	static_assert(CLASS_SCREAM == SERRA_MODEL_SCREAM + 1, "scream index");
+	static_assert(CLASS_HELP == SERRA_MODEL_HELP + 1, "help index");
 	int c = event_leader();
 	out->class_id = (uint8_t)(c + 1);
 	out->confidence = event_best[c];
