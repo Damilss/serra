@@ -1,0 +1,66 @@
+# clangd config for the Pico 2 W (RP2350, Arm Cortex-M33) firmware.
+# Docs: https://clangd.llvm.org/config
+#
+# clangd parses with clang but treats arm-none-eabi-gcc as the compiler, which
+# sets the target triple (thumbv8m.main-none-eabi) and finds newlib headers next
+# to the gcc on PATH. For exact gcc include paths (recommended), also start
+# clangd with:
+#     --query-driver=**/arm-none-eabi-gcc*
+# (VS Code: "clangd.arguments" setting; Neovim: lspconfig cmd).
+# Don't add --target=... here: gcc rejects it, which breaks --query-driver.
+#
+# Generated with Claude Code Opus 5.5
+
+CompileFlags:
+  # Once the Pico SDK CMake build exists, its compile_commands.json is used and the
+  # flags below are layered on top. Until then clangd falls back to these alone.
+  CompilationDatabase: firmware/build
+  Compiler: arm-none-eabi-gcc
+  Add:
+    # Target: RP2350 Arm side (matches the Pico SDK's rp2350-arm-s platform)
+    - -mcpu=cortex-m33
+    - -mthumb
+    - -march=armv8-m.main+fp+dsp
+    - -mfloat-abi=softfp
+    - -mfpu=fpv5-sp-d16
+    # Language + chip defines
+    - -std=gnu11
+    - -DPICO_RP2350=1
+    - -DPICO_PLATFORM=rp2350-arm-s
+    # Warnings
+    - -Wall
+    - -Wextra
+  Remove:
+    # GCC-only flags that clang rejects or warns about
+    - -mthumb-interwork
+    - -fstrict-volatile-bitfields
+    - -fno-tree-*
+    - -fstack-usage
+    - -fanalyzer
+    - -specs=*
+    - --specs=*
+
+Diagnostics:
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - clang-analyzer-*
+    Remove:
+      - bugprone-easily-swappable-parameters
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+Hover:
+  ShowAKA: true
+
+---
+  # Headers have no compile command, so clangd guesses the language (Objective-C++ on macOS).
+  # The firmware is C only.
+  If:
+    PathMatch: .*\.h
+  CompileFlags:
+    Add: [-xc]
