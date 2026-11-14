@@ -1,0 +1,12 @@
+node_modules/
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# local keys (see supabase/README.md)
+.env
+.env.*
+!.env.example

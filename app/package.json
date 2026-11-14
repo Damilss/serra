@@ -1,0 +1,37 @@
+{
+  "name": "serra-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serra base station dashboard: mockup, local Supabase, and repo-wide checks",
+  "type": "module",
+  "scripts": {
+    "serve": "node scripts/serve.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "secrets": "node scripts/gitleaks.mjs scan",
+    "check": "npm run lint && npm run format:check && npm run test:e2e",
+    "prepare": "node scripts/install-hooks.mjs"
+  },
+  "lint-staged": {
+    "*.{js,mjs,cjs,html}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,json,md,yml,yaml}": "prettier --write"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
+    "eslint": "10.15.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-plugin-html": "8.2.1",
+    "globals": "17.14.0",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "prettier": "3.10.1"
+  }
+}

@@ -1,5 +1,10 @@
--- Demo data matching the dashboard mockup (base-station/mockup/). All values are made up.
+-- Demo data matching the dashboard mockup (app/mockup/). All values are made up.
 -- Runs automatically after migrations on `supabase db reset`.
+--
+-- Loudness is in the wire format's units: peak_level is tenths of a dB (898 = 89.8 dB), and
+-- peak_db is computed from it. The levels are what the mockup's sound model gives for a
+-- whistle at Ridge Camp: ~90 dB at the calling node, fading with distance (inverse square plus
+-- absorption) to the nodes that confirm it, down to the 50 dB wake trigger.
 
 insert into public.nodes (node_id, uid, num, name, role, lat, lon, elevation_m, battery_pct, millivolts, rssi_dbm, hops_to_base, last_heard_at, firmware) values
 	(1,     null,               0, 'Ranger Station',        'base',  35.32099, -120.67781, null, null, null, null, 0, now(),                         'base 0.1.0'),
@@ -12,15 +17,19 @@ insert into public.nodes (node_id, uid, num, name, role, lat, lon, elevation_m, 
 
 -- This morning's false positive at Ridge Camp, already resolved.
 with a as (
-	insert into public.alerts (src_node_id, msg_id, class, confidence, peak_level, peak_db, blast_count, hops, latency_ms,
+	insert into public.alerts (src_node_id, msg_id, class, confidence, peak_level, blast_count, hops, latency_ms,
 		node_uptime_ms, est_lat, est_lon, search_radius_m, summary, status, note, received_at, acknowledged_at, resolved_at)
-	values (21190, 286, 'whistle', 0.62, 3100, 62, 3, 4, 446,
-		21400000, 35.32760, -120.66190, 190,
-		'Repeated distress whistle, likely 3 blasts, heard first and loudest by Serranode 05 · Ridge Camp (62 dB) at 09:12. 1 nearby Serranode confirmed it more quietly (46 dB), narrowing the search to about 190 m around grid H2.',
+	values (21190, 286, 'whistle', 0.62, 898, 3, 4, 446,
+		21400000, 35.32776, -120.66153, 245,
+		'Repeated distress whistle, likely 3 blasts, heard first and loudest by Serranode 05 · Ridge Camp (89.8 dB) at 09:12. 2 nearby Serranodes confirmed it more quietly (59.3 dB, 50.2 dB), narrowing the search to about 250 m around grid G2.',
 		'resolved', 'Resolved. Bird call, false positive.', date_trunc('day', now()) + interval '9 hours 12 minutes 44 seconds',
 		date_trunc('day', now()) + interval '9 hours 13 minutes 20 seconds', date_trunc('day', now()) + interval '9 hours 21 minutes 5 seconds')
 	returning id
 )
-insert into public.alert_readings (alert_id, node_id, peak_level, peak_db, confidence, is_first, received_at)
-select a.id, r.node_id, r.peak_level, r.peak_db, r.confidence, r.is_first, date_trunc('day', now()) + interval '9 hours 12 minutes 44 seconds'
-from a, (values (21190, 3100, 62.0, 0.62, true), (55573, 1082, 46.4, 0.41, false)) as r (node_id, peak_level, peak_db, confidence, is_first);
+insert into public.alert_readings (alert_id, node_id, peak_level, confidence, is_first, received_at)
+select a.id, r.node_id, r.peak_level, r.confidence, r.is_first, date_trunc('day', now()) + interval '9 hours 12 minutes 44 seconds'
+from a, (values
+	(21190, 898, 0.62, true),   -- Ridge Camp, heard first: 89.8 dB
+	(55573, 593, 0.41, false),  -- Granite Saddle, 400 m away: 59.3 dB
+	(14975, 502, 0.33, false)   -- Falls Overlook, 800 m away: 50.2 dB, just over the wake trigger
+) as r (node_id, peak_level, confidence, is_first);

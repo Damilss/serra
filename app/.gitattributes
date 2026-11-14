@@ -1,0 +1,5 @@
+# Keep LF everywhere in app/, even on Windows checkouts with core.autocrlf:
+# the husky hooks are shell scripts (CRLF breaks them) and Prettier checks for LF.
+* text=auto eol=lf
+*.png binary
+*.woff2 binary

@@ -5,7 +5,9 @@
 -- Readers: the dashboard uses the anon key. It can read everything, and can only change an alert's
 -- status (acknowledge / resolve). Realtime is on for every table so the dashboard updates live.
 --
--- Field names follow the packet structs in the README's "Mesh protocol (Serranet)" section.
+-- Field names follow the packet structs in the README's "Mesh protocol (Serranet)" section and
+-- firmware/mesh/packet.h. Loudness is stored as sent: peak_level in tenths of a dB on the
+-- calibrated scale (the reference tone reads 80 dB on every node); peak_db is derived from it.
 -- If the wire format changes, update this file in the same PR (see CONTRIBUTING.md).
 
 -- ───────────── Serranodes and the base ─────────────
@@ -38,8 +40,8 @@ create table public.alerts (
 	msg_id           integer not null check (msg_id between 0 and 65535),
 	class            text not null check (class in ('whistle', 'scream', 'help')),
 	confidence       real not null check (confidence between 0 and 1),     -- alert_payload_t.confidence / 255
-	peak_level       integer not null,                                      -- alert_payload_t.peak_level (raw)
-	peak_db          real,                                                  -- calibrated loudness
+	peak_level       smallint not null,                                     -- alert_payload_t.peak_level: i16, tenths of a dB (853 = 85.3 dB)
+	peak_db          real generated always as (peak_level / 10.0) stored,   -- calibrated loudness in dB; never written directly
 	blast_count      smallint,                                              -- 3 = distress whistle pattern
 	hops             smallint,                                              -- 4 - ttl on arrival
 	latency_ms       integer,
@@ -65,8 +67,8 @@ comment on table public.alerts is 'One distress event. status: active -> ack -> 
 create table public.alert_readings (
 	alert_id     bigint not null references public.alerts (id) on delete cascade,
 	node_id      integer not null references public.nodes (node_id),
-	peak_level   integer not null,
-	peak_db      real,
+	peak_level   smallint not null,                                       -- as heard by this node, tenths of a dB
+	peak_db      real generated always as (peak_level / 10.0) stored,
 	confidence   real check (confidence between 0 and 1),
 	is_first     boolean not null default false,                          -- heard it first and loudest
 	received_at  timestamptz not null default now(),

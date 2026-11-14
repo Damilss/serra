@@ -1,0 +1,33 @@
+# Serra pre-push: runs on every push in the repo. Runs from the repository root.
+# 1. gitleaks on every commit being pushed.
+# 2. If any of them touch app/: lint, format check and the Playwright E2E tests.
+# Skip once with `git push --no-verify`.
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-push: node not found on PATH, so the checks can't run." >&2
+  exit 1
+fi
+
+zero=$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')
+app_changed=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue            # deleting a branch: nothing to check
+  if [ "$remote_sha" = "$zero" ]; then
+    range="$local_sha --not --remotes"              # new branch: only commits not on any remote yet
+  else
+    range="$remote_sha..$local_sha"
+  fi
+
+  node app/scripts/gitleaks.mjs push "$range" || exit 1
+
+  # shellcheck disable=SC2086  # $range is deliberately split into separate git arguments
+  if [ -n "$(git log --format= --name-only $range -- app/ | head -n 1)" ]; then
+    app_changed=1
+  fi
+done
+
+if [ "$app_changed" = 1 ]; then
+  echo "pre-push: app/ changed, running lint, format check and E2E tests"
+  cd app && npm run --silent check || exit 1
+fi
