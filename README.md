@@ -23,7 +23,7 @@
 6. [Mesh protocol (Serranet)](#mesh-protocol-serranet)
 7. [Low-power runtime](#low-power-runtime)
 8. [Audio classifier pipeline](#audio-classifier-pipeline)
-9. [Base station](#base-station)
+9. [Base station and app](#base-station-and-app)
 10. [Demo](#demo)
 11. [Known limitations and open questions](#known-limitations-and-open-questions)
 12. [Future work](#future-work)
@@ -48,12 +48,12 @@ Everything runs locally. Out there, the cloud isn't an option.
 ```
    Field (battery-powered Serranodes)                 Ranger station / trailhead
 
-   [Node 1] ))) [Node 2] ))) [Node 3] ))) BLE ))) [ Pi 5 BLE receiver ]
+   [Node 1] ))) [Node 2] ))) [Node 3] ))) BLE ))) [ Pi 5 base station ]
                     ^                                      |
                     |                              USB-C (USB gadget:
       whistle / scream / "help" heard here          Ethernet over USB)
                                                            v
-                                                  [ Laptop: Supabase + dashboard ]
+                                                  [ Laptop app: Supabase + map ]
                                                   (localhost, no internet)
 ```
 
@@ -61,7 +61,7 @@ Everything runs locally. Out there, the cloud isn't an option.
 2. **Classify rarely.** When the check fires, the node wakes the AI classifier, which decides whether it's a whistle, a scream, someone shouting "help", or nothing to worry about (and how confident it is).
 3. **Alert.** On a positive detection, the node builds a small alert packet (node ID, sequence number, class, confidence, loudness in dB, time) and broadcasts it over BLE.
 4. **Hop.** Every node that hears a new alert re-broadcasts it, so it floods across the mesh until it reaches the base station.
-5. **Locate.** The Pi 5 hears the alerts and passes them over USB to the laptop, whose dashboard lights up the node(s) that heard the call on a map. If several nodes heard it, the loudest one gives a rough location.
+5. **Locate.** The Pi 5 base station hears the alerts and passes them over USB to the app on the laptop, whose dashboard lights up the node(s) that heard the call on a map. If several nodes heard it, the loudest one gives a rough location.
 
 ---
 
@@ -71,8 +71,8 @@ Everything runs locally. Out there, the cloud isn't an option.
 |---|---|---|
 | Raspberry Pi Pico 2 W | 3+ | Field nodes |
 | INMP441 I2S MEMS microphone | 1 per node | Audio input; the Pico has no built-in mic. L/R pin tied to GND (left channel) |
-| Raspberry Pi 5 | 1 | Base station BLE receiver; runs in USB gadget mode, plugged into the laptop |
-| Laptop | 1 | Base station host: Supabase (Docker) and the dashboard on localhost; powers the Pi 5 over USB-C |
+| Raspberry Pi 5 | 1 | Base station: BLE listener and decoder; runs in USB gadget mode, plugged into the laptop |
+| Laptop | 1 | Runs the app (`app/`): Supabase (Docker), the dashboard on localhost and the optional local LLM; powers the Pi 5 over USB-C |
 | Batteries / USB power banks | 1 per node | Field power |
 
 **Pico 2 W at a glance:** RP2350 microcontroller with a choice of dual Arm Cortex-M33 or dual Hazard3 RISC-V cores (we build for Arm), 520 KB SRAM, 4 MB flash, PIO state machines, and an Infineon CYW43439 radio (2.4 GHz Wi-Fi + Bluetooth LE).
@@ -105,20 +105,20 @@ Everything runs locally. Out there, the cloud isn't an option.
 +---------------------------------------------------------+
 ```
 
-### Base station (Raspberry Pi 5 + laptop)
+### Base station (Pi 5) and app (laptop)
 
 ```
-Raspberry Pi 5 (USB gadget)                      Laptop (localhost)
+Base station: Pi 5 (USB gadget)                  App: laptop (localhost)
 +--------------------------------+  USB-C link  +------------------------------------------+
 | BLE scanner (bleak)            |  Ethernet    | Supabase (Postgres, Docker)              |
 |  -> packet decoder             |  over USB    |  -> Realtime -> web dashboard (map)      |
 |  -> dedup by (src, msg_id)     | -----------> |                                          |
-|  -> event grouping             |              | optional: local LLM summaries            |
+|  -> event grouping             |              | optional: Ollama LLM summaries (~9B)     |
 |  -> writes rows (service_role) |              |                                          |
 +--------------------------------+              +------------------------------------------+
 ```
 
-The Pi 5 runs in **USB gadget mode** on its USB-C port: plugged into the laptop it shows up as a USB Ethernet adapter, so the two have a private point-to-point network with no Wi-Fi or router involved. The same cable powers the Pi. The BLE listener on the Pi writes to the laptop's Supabase over that link; everything else (database, dashboard, LLM) lives on the laptop and is opened at `localhost`.
+The Pi 5 runs in **USB gadget mode** on its USB-C port: plugged into the laptop it shows up as a USB Ethernet adapter, so the two have a private point-to-point network with no Wi-Fi or router involved. The same cable powers the Pi. The BLE listener on the Pi writes to the laptop's Supabase over that link; everything else (database, dashboard, LLM) is the app, lives on the laptop and is opened at `localhost`.
 
 ---
 
@@ -373,12 +373,12 @@ The INMP441 sends 24-bit samples MSB-first inside 32-bit I2S slots. With L/R tie
 
 ---
 
-## Base station
+## Base station and app
 
-Split across two machines joined by one USB-C cable (see [decision 8](#8-raspberry-pi-5-as-the-base-station)):
+Two separate pieces on two machines, joined by one USB-C cable (see [decision 8](#8-raspberry-pi-5-as-the-base-station)):
 
-- **Raspberry Pi 5:** BLE listener, decoder, dedup and event grouping (Python + `bleak`). Runs in USB gadget mode and writes to Supabase on the laptop over the USB link with the `service_role` key.
-- **Laptop:** Supabase (Postgres + Realtime, in Docker) and the dashboard, both on `localhost`, plus the optional LLM.
+- **Base station, Raspberry Pi 5 (`base-station/`):** BLE listener, decoder, dedup and event grouping (Python + `bleak`). Runs in USB gadget mode and writes to Supabase on the laptop over the USB link with the `service_role` key.
+- **App, laptop (`app/`):** Supabase (Postgres + Realtime, in Docker) and the dashboard, both on `localhost`, plus the optional LLM.
 
 What it does:
 
@@ -387,7 +387,7 @@ What it does:
 - **Group events.** Alerts of the same class from different nodes that arrive within about 2 seconds of each other are treated as one event heard by several nodes. Node timestamps are uptime and aren't compared across nodes.
 - **Dashboard.** A web page served on the laptop at `localhost`, reading Supabase with live updates through Realtime, and showing a map of node positions. Nodes light up when they report a detection, labeled whistle / scream / help; the loudest (calibrated dB) is highlighted as the likely location.
 - **No internet.** The Pi-to-laptop link is USB, and Supabase and the dashboard run locally. Pull the Supabase Docker images before the event; after that it all starts offline.
-- **Optional:** a small local model on the laptop turns raw alerts into plain language, e.g. *"Repeated distress whistle near node 3, 12:41, likely 3 blasts."* or *"Someone shouted 'help' near node 2, 12:43."*
+- **Optional:** a local model on the laptop (e.g. a ~9B model through Ollama) turns raw alerts into plain language, e.g. *"Repeated distress whistle near node 3, 12:41, likely 3 blasts."* or *"Someone shouted 'help' near node 2, 12:43."*
 
 ---
 
@@ -452,7 +452,8 @@ serra/
 │   ├── data/                # recordings (large files not committed)
 │   └── train.py
 ├── serra_brand/         # Serra brand kit: logos (SVG/PNG), brand PDF, colors, type
-├── base-station/            # Pi 5 BLE listener; laptop Supabase + dashboard
+├── base-station/            # Pi 5: BLE listener, decoder, dedup -> writes to Supabase
+├── app/                     # laptop: Supabase + map dashboard, optional Ollama LLM
 ├── scripts/
 │   ├── install-firmware-tooling.sh  # toolchain + Pico SDK setup (macOS, apt Linux)
 │   └── pico_setup.sh        # Raspberry Pi's full SDK/OpenOCD setup on the Pi 5

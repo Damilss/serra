@@ -13,9 +13,9 @@
 #include "pico/stdlib.h"
 
 /**
- * BLINK_PERIOD_MS - LED toggle interval; 500 ms = one blink per second
+ * BLINK_PERIOD_MS - LED toggle interval; 1000 ms = one blink every 2 s
  */
-#define BLINK_PERIOD_MS 500
+#define BLINK_PERIOD_MS 1000
 
 /**
  * TEST_BEACON_PERIOD_MS - how often the test beacon sends a fake alert
