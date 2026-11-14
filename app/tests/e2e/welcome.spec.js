@@ -6,7 +6,7 @@ test.describe('welcome screen', () => {
     await expect(page).toHaveTitle('Serra Base Station');
     await expect(page.locator('#welcome')).toBeVisible();
     await expect(page.locator('#dashboard')).toBeHidden();
-    await expect(page.locator('#welcome')).toContainText(/audio-first/i);
+    await expect(page.locator('#welcome h1')).toHaveText('Off-grid search and rescue mesh');
   });
 
   test('Open base station plays the loading screen, then opens the dashboard', async ({ page }) => {
