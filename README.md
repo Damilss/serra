@@ -188,7 +188,7 @@ This was the biggest change during ideation. The original plan was to interlink 
 
 **Why:** Rewriting the wireless chip driver would consume the entire weekend for no visible gain. Our custom work goes into the mesh layer and the classifier.
 
-**Status: decided.** We use the SDK's `pico_cyw43_driver` and BTstack, and the firmware builds on the Pico SDK. The driver can't be lifted out on its own, because `cyw43-driver` depends on other SDK pieces: PIO (the SPI bus to the CYW43439), DMA, interrupts, timers and `async_context`. Writing our own driver was never realistic. The CYW43439 runs a closed Infineon firmware that the driver uploads at every boot, and the host side would also need a full Bluetooth stack.
+**Status: decided (2026-11-13).** We use the SDK's `pico_cyw43_driver` and BTstack, and the firmware builds on the Pico SDK. The driver can't be lifted out on its own, because `cyw43-driver` depends on other SDK pieces: PIO (the SPI bus to the CYW43439), DMA, interrupts, timers and `async_context`. Writing our own driver was never realistic. The CYW43439 runs a closed Infineon firmware that the driver uploads at every boot, and the host side would also need a full Bluetooth stack.
 
 ### 7. Listen cheaply, classify rarely
 
