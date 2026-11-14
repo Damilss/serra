@@ -29,6 +29,8 @@ pico_sdk_init()
 
 add_executable(node
     main.c
+    runtime/scheduler.c
+    blink_light/blink_light.c
 )
 
 # btstack_config.h lives next to this file; BTstack includes it by name.
