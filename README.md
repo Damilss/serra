@@ -191,6 +191,8 @@ This was the biggest change during ideation. The original plan was to interlink 
 
 **Decision:** Build on the Pico SDK's own primitives (`async_context`, hardware alarms, `pico_multicore`, PIO and DMA helpers) instead of writing our own scheduler or sleep/wake layer. Our "runtime" is a thin layer of glue: the node state machine and radio duty cycling.
 
+**Update (2026-11-14):** we did add a small cooperative task scheduler (`firmware/runtime/scheduler.c`, a fixed task table plus WFE sleep, about 100 lines) because a table of periodic tasks was easier to read than chained alarms. It still sits on the SDK: it polls the radio with `cyw43_arch_poll()` and sleeps with `cyw43_arch_wait_for_work_until()`, through hooks set with `sched_set_idle()`.
+
 **Why:** We're building a demo, not a product. A custom scheduler and bare-metal power management compete for the same weekend as the mesh and the classifier, and they're invisible on stage. The SDK already gives us event scheduling, timers and wait-for-interrupt idling, and BTstack on the Pico already runs on `async_context` (we use it in poll mode via `pico_cyw43_arch_poll`), so we work with it rather than around it. The interesting systems work goes into the mesh and on-device inference.
 
 ### 6. Keep the Pico SDK's radio driver
@@ -318,7 +320,7 @@ Our "OS" is a small runtime sitting on top of the Pico SDK. The SDK provides dri
 
 **SDK building blocks:**
 - **Radio and BLE:** `pico_cyw43_arch_poll` + `pico_btstack_ble` + `pico_btstack_cyw43` (as in `firmware/CMakeLists.txt`). Radio and BTstack work happens when core 0's main loop calls `cyw43_arch_poll()`; under the hood that's the SDK's `async_context` in poll mode.
-- **Scheduling:** the core 0 main loop plus the SDK alarm pool (`add_alarm_in_ms`, repeating timers) for scan windows, heartbeat and relay jitter. No custom task scheduler.
+- **Scheduling:** a small cooperative scheduler (`firmware/runtime/scheduler.c`) owns core 0's main loop and runs periodic tasks (scan windows, heartbeat, LED). Each pass it calls `cyw43_arch_poll()`, runs due tasks, then sleeps in `cyw43_arch_wait_for_work_until()` until the next task is due or the radio has work. The radio calls are wired in from `main.c` through `sched_set_idle()`, so the scheduler itself doesn't depend on the cyw43 driver. Short one-shot delays such as relay jitter can still use the SDK alarm pool.
 - **Dual core:** `pico_multicore`. Core 0 runs the radio and mesh; core 1 runs audio, the wake trigger and the classifier. They pass detections over the SDK's inter-core FIFO or a `queue_t`.
 - **Audio input:** a PIO I2S program plus DMA streams INMP441 samples into a ring buffer, so the CPU only wakes when a block is ready.
 - **Idling:** cores wait on interrupts (`__wfi()` / the SDK's blocking waits) instead of busy-waiting.

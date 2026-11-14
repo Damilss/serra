@@ -36,6 +36,22 @@ static sched_slot_t slots[SCHED_MAX_TASKS];
 static int num_slots;
 
 /**
+ * wfe_until - default wait_until hook: sleep (WFE) until @until
+ * @until: when the next task is due
+ *
+ * an interrupt or the other core's __sev() can wake it early.
+ */
+static void wfe_until(absolute_time_t until) {
+	best_effort_wfe_or_timeout(until);
+}
+
+static const sched_idle_t default_idle = {
+	.poll = NULL,
+	.wait_until = wfe_until,
+};
+static const sched_idle_t *idle = &default_idle;
+
+/**
  * sched_add - register a task.
  * @task: the task to run; must stay valid while the scheduler runs
  *
@@ -95,17 +111,36 @@ static absolute_time_t run_due_tasks(void) {
 }
 
 /**
+ * sched_set_idle - set the loop's poll and sleep hooks
+ * @idle_hooks: the hooks; must stay valid while the scheduler runs
+ *
+ * return: 0 on success, -1 if @idle_hooks or @idle_hooks->wait_until is NULL.
+ */
+int sched_set_idle(const sched_idle_t *idle_hooks) {
+	if (idle_hooks == NULL || idle_hooks->wait_until == NULL)
+		return -1;
+
+	idle = idle_hooks;
+	return 0;
+}
+
+/**
  * sched_run - run the scheduler forever
  *
- * between runs the core sleeps (WFE) until the next task is due. an
- * interrupt or the other core's __sev() can wake it early; the loop then
- * just checks again. a task with period 0 keeps the core awake.
+ * each loop calls the poll hook (e.g. cyw43_arch_poll()), runs the due
+ * tasks, then sleeps through the wait_until hook until the next task is due.
+ * with the cyw43 hooks the radio's interrupt wakes the core early when it
+ * has work; the loop then just checks again. a task with period 0 keeps the
+ * core awake.
  */
 void sched_run(void) {
 	for (;;) {
+		if (idle->poll != NULL)
+			idle->poll();
+
 		absolute_time_t next = run_due_tasks();
 
 		if (!time_reached(next))
-			best_effort_wfe_or_timeout(next);
+			idle->wait_until(next);
 	}
 }
