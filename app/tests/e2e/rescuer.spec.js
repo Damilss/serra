@@ -5,7 +5,7 @@ import { test, expect } from './fixtures.js';
 test.use({ viewport: { width: 390, height: 844 } });
 
 test('opens in rescuer mode, simulates a call and walks it to found', async ({ page }) => {
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   const rescuer = page.locator('#rescuer');
   await expect(rescuer).toBeVisible();
   await expect(page.locator('#mode-btn')).toHaveAttribute('aria-pressed', 'true');
@@ -24,7 +24,7 @@ test('opens in rescuer mode, simulates a call and walks it to found', async ({ p
 });
 
 test('the mode button switches back to the full dashboard', async ({ page }) => {
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await expect(page.locator('#rescuer')).toBeVisible();
   await page.locator('#mode-btn').click();
   await expect(page.locator('#rescuer')).toBeHidden();

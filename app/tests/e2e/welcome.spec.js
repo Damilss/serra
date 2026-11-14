@@ -17,7 +17,7 @@ test.describe('welcome screen', () => {
     await expect(loader).toContainText('Joining Serranet');
     await expect(loader).toContainText('Serranet online', { timeout: 5_000 });
     await expect(page.locator('#dashboard')).toBeVisible({ timeout: 5_000 });
-    await expect(page).toHaveURL(/#dashboard$/);
+    await expect(page).toHaveURL(/\/dashboard$/);
     await expect(loader).toBeHidden({ timeout: 2_000 });
   });
 

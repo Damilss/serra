@@ -51,4 +51,4 @@ Colors, type and logos follow the Serra brand kit (`serra_brand/`): Night ground
 
 ## Next
 
-The real dashboard will be Next.js + shadcn/ui + Tailwind in `app/`, built from this mockup against a typed data contract with a mock feed, then switched to the live base-station feed.
+The real dashboard is now the Next.js app in `app/src/` (see [app/README.md](../README.md)), ported from this mockup. This file stays as the design reference; run it with `npm run mockup`.

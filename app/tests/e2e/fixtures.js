@@ -21,7 +21,7 @@ export { expect };
 
 /** Opens the dashboard directly (skips the welcome screen). */
 export async function openDashboard(page) {
-  await page.goto('/#dashboard');
+  await page.goto('/dashboard');
   await expect(page.locator('#dashboard')).toBeVisible();
 }
 

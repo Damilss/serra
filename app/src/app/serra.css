@@ -1,0 +1,1755 @@
+/*
+ * Serra dashboard styles, carried over from the design mockup (app/mockup/index.html).
+ * Class names match the components in src/components. Brand tokens are the CSS variables on :root;
+ * the same colors are exposed to Tailwind in globals.css (bg-night, text-flare, ...).
+ */
+/* Serra brand kit v0.1 — Night ground, Pine surfaces, Moss quiet text/lines, Fog text, Flare = the one signal per view.
+Layout: welcome = pitch-cover composition over topo rings; ops view = top bar / stats / Fog alert card / picker /
+[ map + replay + (feed | packets) | Serranode panel ]; rescuer view = Fog card for daylight reading. */
+/* Brand tokens: colors, type and spacing. Everything below uses these variables. */
+:root {
+  --night: #0d1512;
+  --pine: #1b2b24;
+  --pine-2: #223630;
+  --moss: #8fa397;
+  --fog: #eef1ec;
+  --flare: #ff5a1f;
+  --ember: #b93a0b;
+  --stone: #56615b;
+  --line: color-mix(in srgb, var(--moss) 18%, var(--night));
+  --line-2: color-mix(in srgb, var(--moss) 28%, var(--night));
+  --font-sans: 'Instrument Sans Variable', 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+  --font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --r: 14px;
+  color-scheme: dark;
+}
+[hidden] {
+  display: none !important;
+}
+html,
+body {
+  height: 100%;
+}
+body {
+  background: var(--night);
+  color: var(--fog);
+  font: 400 15px/1.55 var(--font-sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  -webkit-font-smoothing: antialiased;
+}
+/* Base elements and shared text styles (.label = mono caps, .data = mono values, .fdot = Flare dot) */
+button {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--fog);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+.label {
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+.data {
+  font: 500 13px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+.fdot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--flare);
+  flex: none;
+}
+svg.logo {
+  display: block;
+  width: auto;
+}
+
+/* ───────────── Welcome ───────────── */
+/* Full-screen cover: animated topo canvas behind, hero lockup + tagline + CTA, boot checklist on the right */
+.welcome {
+  position: relative;
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+}
+#welcome-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+.corner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 28px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+}
+.welcome-inner {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr);
+  gap: 56px;
+  align-items: center;
+  padding-block: 16px;
+}
+.hero {
+  display: grid;
+  gap: 26px;
+  min-width: 0;
+  justify-items: start;
+}
+.hero svg.logo {
+  height: clamp(56px, 8vw, 96px);
+  max-width: 100%;
+}
+.tagline {
+  margin: -10px 0 0;
+  font: 400 clamp(18px, 2vw, 22px)/1.3 var(--font-sans);
+  color: var(--moss);
+}
+.hero h1 {
+  margin: 10px 0 0;
+  font: 600 clamp(40px, 5.6vw, 72px)/1.02 var(--font-sans);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  max-width: 15ch;
+}
+.lede {
+  margin: 0;
+  max-width: 54ch;
+  font-size: 18px;
+  line-height: 28px;
+  color: color-mix(in srgb, var(--fog) 80%, var(--moss));
+}
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 22px;
+}
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  font: 600 16px/1 var(--font-sans);
+  letter-spacing: -0.01em;
+  color: var(--night);
+  background: var(--fog);
+  padding: 16px 22px;
+  border-radius: 999px;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.3s ease;
+}
+.cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--fog) 12%, transparent);
+}
+.cta svg {
+  transition: transform 0.2s ease;
+}
+.cta:hover svg {
+  transform: translateX(4px);
+}
+.hint {
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--moss);
+  letter-spacing: 0.04em;
+}
+.facts {
+  margin: 4px 0 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line-2);
+}
+.facts div {
+  padding: 16px 16px 0 0;
+  display: grid;
+  gap: 6px;
+}
+.facts div + div {
+  padding-left: 16px;
+  border-left: 1px solid var(--line);
+}
+.facts dt {
+  font: 500 10.5px/1.2 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+.facts dd {
+  margin: 0;
+  font: 600 30px/1 var(--font-sans);
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+/* Boot checklist card ("Serra base station 0.1.0 · Pi 5 ... ok"), revealed line by line by runBoot() */
+.boot {
+  min-width: 0;
+  background: color-mix(in srgb, var(--pine) 92%, transparent);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+  overflow: hidden;
+  backdrop-filter: blur(6px);
+}
+.boot-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-2);
+}
+.boot-head svg {
+  height: 22px;
+}
+.boot-head .label:last-child {
+  margin-left: auto;
+}
+.serranet-loading {
+  animation: serranet-spin 1.4s linear infinite;
+  transform-origin: 50% 50%;
+}
+@keyframes serranet-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.boot ol {
+  list-style: none;
+  margin: 0;
+  padding: 14px 18px 18px;
+  display: grid;
+  gap: 8px;
+  font: 400 12.5px/1.45 var(--font-mono);
+  min-height: 330px;
+  align-content: start;
+}
+.boot li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  animation: line-in 0.25s ease-out both;
+}
+.boot li .k {
+  color: var(--fog);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.boot li .lead {
+  flex: 1;
+  border-bottom: 1px dotted var(--line-2);
+  transform: translateY(-3px);
+  min-width: 12px;
+}
+.boot li .v,
+.boot li .t {
+  color: var(--moss);
+  white-space: nowrap;
+}
+.boot li.final .k {
+  font-weight: 700;
+}
+.boot li.final .v {
+  color: var(--fog);
+  font-weight: 700;
+}
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Logo call: the three arcs carry outward from the dot, one after another, on repeat */
+.arc {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  animation: arc-call 2.8s cubic-bezier(0.3, 0.7, 0.3, 1) infinite;
+}
+.arc.a2 {
+  animation-delay: 0.22s;
+}
+.arc.a3 {
+  animation-delay: 0.44s;
+}
+@keyframes arc-call {
+  0% {
+    opacity: 0.12;
+    transform: translateX(-10%);
+  }
+  14% {
+    opacity: 1;
+    transform: none;
+  }
+  62% {
+    opacity: 1;
+    transform: none;
+  }
+  84%,
+  100% {
+    opacity: 0.12;
+    transform: translateX(6%);
+  }
+}
+
+/* Loading screen: the mark turns into four spinning circles */
+/*
+  States are classes added by the #enter click handler, in order:
+    .in (fade in) → .morph (the arcs become three circles) → .spin (all four orbit) → .out (fade out)
+*/
+.loader {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--night);
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 28px;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.loader.in {
+  opacity: 1;
+}
+.loader.out {
+  opacity: 0;
+}
+.ld-svg {
+  width: min(260px, 60vw);
+  height: auto;
+  overflow: visible;
+}
+.ld-c {
+  transition: transform 0.75s cubic-bezier(0.65, 0, 0.35, 1);
+}
+.ld-dot {
+  transform: translate(33px, 60px);
+}
+.ld-c.c1 {
+  transform: translate(55px, 60px) scale(0);
+}
+.ld-c.c2 {
+  transform: translate(73px, 60px) scale(0);
+}
+.ld-c.c3 {
+  transform: translate(91px, 60px) scale(0);
+}
+.loader.morph .ld-dot {
+  transform: translate(60px, 36px);
+}
+.loader.morph .ld-c.c1 {
+  transform: translate(84px, 60px) scale(1);
+}
+.loader.morph .ld-c.c2 {
+  transform: translate(60px, 84px) scale(1);
+}
+.loader.morph .ld-c.c3 {
+  transform: translate(36px, 60px) scale(1);
+}
+.ld-arcs .arc {
+  transition: opacity 0.3s ease;
+}
+.loader.morph .ld-arcs .arc {
+  animation: none;
+  opacity: 0;
+}
+.ld-ring {
+  transform-box: view-box;
+  transform-origin: 60px 60px;
+}
+.loader.spin .ld-ring {
+  animation: ld-spin 1.1s cubic-bezier(0.5, 0.1, 0.5, 0.9) infinite;
+}
+@keyframes ld-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ld-text {
+  min-height: 1em;
+  color: var(--fog);
+}
+.ld-sub {
+  margin-top: -18px;
+}
+
+/* ───────────── Dashboard ───────────── */
+/* Dashboard shell: top bar, stat tiles, alert card, node picker, then the stage (map + panel) */
+.dash {
+  display: grid;
+  gap: 14px;
+  padding-block: 16px;
+  max-width: 1640px;
+  margin: 0 auto;
+}
+/* Top bar: brand lockup, status chips (Serranet, sound, rescuer mode toggle) and the clock */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-decoration: none;
+  color: var(--fog);
+}
+.brand svg.logo {
+  height: 30px;
+}
+.brand .sep {
+  width: 1px;
+  height: 26px;
+  background: var(--line-2);
+}
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+  background: transparent;
+  white-space: nowrap;
+}
+.chip b {
+  color: var(--fog);
+  font-weight: 500;
+}
+.chip svg {
+  height: 13px;
+}
+button.chip {
+  cursor: pointer;
+}
+button.chip:hover {
+  border-color: var(--moss);
+  color: var(--fog);
+}
+button.chip[aria-pressed='true'] {
+  background: var(--fog);
+  color: var(--night);
+  border-color: var(--fog);
+}
+button.chip[aria-pressed='true'] b {
+  color: var(--night);
+}
+#clock {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Stat tiles under the top bar (Serranodes online, latency, alerts today, ...) */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border-radius: var(--r);
+  background: var(--pine);
+  position: relative;
+}
+.stat {
+  padding: 14px 18px 15px;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.stat + .stat {
+  border-left: 1px solid var(--line-2);
+}
+.stat b {
+  font: 600 30px/1 var(--font-sans);
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+.stat b small {
+  font: 500 12px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--moss);
+  margin-left: 5px;
+  text-transform: uppercase;
+}
+.stat em {
+  font: 400 11.5px/1.3 var(--font-mono);
+  color: var(--moss);
+  font-style: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mock-tag {
+  position: absolute;
+  right: 14px;
+  top: -9px;
+  padding: 3px 7px;
+  background: var(--night);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+
+/* Alert card on Fog, from the brand's sample alert */
+.alert-card {
+  background: var(--fog);
+  color: var(--night);
+  border-radius: var(--r);
+  padding: 20px 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 24px;
+  animation: card-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.alert-card .head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.alert-card h2 {
+  margin: 0;
+  font: 600 30px/1.05 var(--font-sans);
+  letter-spacing: -0.035em;
+}
+.alert-card .head .fdot {
+  width: 14px;
+  height: 14px;
+  animation: call 1.6s infinite;
+}
+@keyframes call {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--flare) 60%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 12px transparent;
+  }
+}
+.alert-card.ack .head .fdot {
+  background: transparent;
+  border: 2.5px solid var(--night);
+  animation: none;
+}
+.alert-card .state {
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+.alert-card.ack .state {
+  color: var(--stone);
+}
+.alert-card p {
+  margin: 6px 0 0;
+  color: var(--stone);
+  font-size: 15.5px;
+  line-height: 1.5;
+  max-width: 90ch;
+}
+.alert-card p b {
+  color: var(--night);
+  font-weight: 600;
+}
+.alert-card .readings {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, max-content));
+  gap: 0 40px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--stone) 30%, transparent);
+}
+.alert-card .readings div {
+  display: grid;
+  gap: 6px;
+}
+.alert-card .readings span {
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--stone);
+}
+.alert-card .readings b {
+  font: 500 16px/1 var(--font-mono);
+  color: var(--night);
+  font-variant-numeric: tabular-nums;
+}
+.alert-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 10px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  background: var(--pine);
+  color: var(--fog);
+  font: 600 13.5px/1 var(--font-sans);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+}
+.btn:hover {
+  border-color: var(--moss);
+}
+.btn.solid {
+  background: var(--fog);
+  color: var(--night);
+  border-color: var(--fog);
+}
+.btn.ghost {
+  background: transparent;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.on-fog .btn {
+  background: transparent;
+  color: var(--night);
+  border-color: color-mix(in srgb, var(--stone) 45%, transparent);
+}
+.on-fog .btn:hover {
+  border-color: var(--night);
+}
+.on-fog .btn.solid {
+  background: var(--night);
+  color: var(--fog);
+  border-color: var(--night);
+}
+
+/* Node picker row: "Viewing" dropdown, ← → stepper, class segment (whistle / scream / help), Simulate */
+.picker {
+  display: flex;
+  align-items: center;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  padding: 10px 12px 10px 18px;
+  background: var(--pine);
+  border-radius: var(--r);
+}
+.select-wrap {
+  position: relative;
+  min-width: 0;
+  flex: 0 1 360px;
+}
+.select-wrap::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin-top: -6px;
+  border-right: 2px solid var(--fog);
+  border-bottom: 2px solid var(--fog);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  background: var(--night);
+  color: var(--fog);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 10px 42px 10px 16px;
+  font: 600 15px/1.2 var(--font-sans);
+  cursor: pointer;
+}
+select:hover {
+  border-color: var(--moss);
+}
+select option {
+  background: var(--pine);
+  color: var(--fog);
+}
+.stepper {
+  display: flex;
+  gap: 6px;
+}
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: var(--night);
+  color: var(--fog);
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+}
+.icon-btn:hover {
+  border-color: var(--moss);
+}
+.picker .right {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.kbd {
+  font: 500 10.5px/1 var(--font-mono);
+  color: var(--moss);
+  letter-spacing: 0.04em;
+}
+.kbd kbd {
+  font: inherit;
+  padding: 2px 5px;
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: var(--fog);
+}
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--night);
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font: 500 11px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+.seg button[aria-pressed='true'] {
+  background: var(--pine-2);
+  color: var(--fog);
+}
+.sim {
+  gap: 10px;
+}
+
+/* Stage: left column (map, replay scrubber, feed + packets) and the Serranode panel on the right */
+.stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+  gap: 14px;
+  align-items: start;
+}
+.ops-left {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.map {
+  position: relative;
+  height: clamp(380px, 58vh, 660px);
+  border-radius: var(--r);
+  overflow: hidden;
+  background: var(--night);
+  border: 1px solid var(--line-2);
+}
+.map canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+}
+/* Map overlays (HUD) in the four corners: title, live tag, legend (bl) and scale bar (br) */
+.hud {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+}
+.hud.tl {
+  top: 16px;
+  left: 18px;
+  display: grid;
+  gap: 6px;
+}
+.hud.tl strong {
+  font: 600 22px/1 var(--font-sans);
+  letter-spacing: -0.035em;
+}
+.hud.tr {
+  top: 16px;
+  right: 16px;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+.map-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--moss);
+  background: color-mix(in srgb, var(--night) 80%, transparent);
+  border: 1px solid var(--line-2);
+}
+.map-tag i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moss);
+}
+.map-tag.incoming {
+  color: var(--fog);
+}
+.map-tag.incoming i {
+  background: var(--flare);
+  animation: blink 0.8s steps(2) infinite;
+}
+.map-tag.replay {
+  color: var(--night);
+  background: var(--fog);
+  border-color: var(--fog);
+}
+.map-tag.replay i {
+  background: var(--night);
+}
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+.hud.bl {
+  bottom: 14px;
+  left: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  max-width: calc(100% - 210px);
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+.hud.bl span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+/* Legend swatches, one per thing drawn on the map */
+.sw {
+  display: inline-block;
+}
+.sw.node {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--moss);
+}
+.sw.call {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--flare);
+}
+.sw.conf {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--flare) 50%, transparent);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--flare) 50%, transparent);
+}
+.sw.sel {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--fog);
+}
+.sw.base {
+  width: 8px;
+  height: 8px;
+  background: var(--fog);
+  transform: rotate(45deg);
+}
+.sw.link {
+  width: 16px;
+  border-top: 1px solid var(--moss);
+}
+.sw.route {
+  width: 16px;
+  border-top: 1.5px dashed var(--fog);
+}
+.sw.area {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid var(--flare);
+}
+.hud.br {
+  bottom: 14px;
+  right: 16px;
+  display: grid;
+  gap: 5px;
+  justify-items: end;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--moss);
+  text-transform: uppercase;
+}
+.scalebar {
+  display: flex;
+  height: 5px;
+  border: 1px solid var(--moss);
+  width: 120px;
+}
+.scalebar i {
+  flex: 1;
+}
+.scalebar i:nth-child(odd) {
+  background: var(--moss);
+}
+
+/* Replay scrubber under the map: play/pause, range input, event marks (Call / Classified / At base) */
+.replay {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 16px 10px 10px;
+  background: var(--pine);
+  border-radius: var(--r);
+}
+.replay-title {
+  font: 500 11.5px/1.3 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--fog);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 260px;
+}
+.track {
+  min-width: 0;
+}
+input[type='range'] {
+  width: 100%;
+  accent-color: var(--fog);
+  cursor: pointer;
+  display: block;
+}
+.marks {
+  position: relative;
+  height: 12px;
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+.marks span {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+#rp-time {
+  font: 500 12px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  min-width: 7ch;
+  text-align: right;
+}
+
+/* Dock under the map: the alert feed and the Serranet packet view side by side */
+.dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 14px;
+}
+.card {
+  background: var(--pine);
+  border-radius: var(--r);
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-2);
+}
+.card-head h3 {
+  margin: 0;
+  font: 600 18px/1 var(--font-sans);
+  letter-spacing: -0.03em;
+}
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 330px;
+  overflow: auto;
+}
+.feed li {
+  padding: 14px 18px;
+  display: grid;
+  gap: 7px;
+  border-bottom: 1px solid var(--line-2);
+}
+.feed .top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.feed .title {
+  font: 600 15.5px/1.25 var(--font-sans);
+  letter-spacing: -0.02em;
+}
+.feed .meta {
+  font: 500 11px/1.5 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+  font-variant-numeric: tabular-nums;
+}
+.feed .note {
+  font-size: 13px;
+  color: var(--moss);
+}
+.feed .acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.feed .acts .btn {
+  padding: 7px 11px;
+  font-size: 12.5px;
+  background: var(--night);
+}
+/* Alert status badge in the feed: active (Flare), incoming, ack, resolved */
+.st {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fog);
+}
+.st i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.st.active i,
+.st.incoming i {
+  background: var(--flare);
+}
+.st.ack i {
+  border: 1.5px solid var(--fog);
+}
+.st.resolved {
+  color: var(--moss);
+}
+.st.resolved i {
+  background: var(--stone);
+}
+/* Packet view: colored hex bytes per field (.fld), the decode table and the packet log */
+.pk-wrap {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 0;
+}
+.hexview {
+  padding: 14px 18px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 6px;
+  border-bottom: 1px solid var(--line-2);
+}
+.fld {
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+}
+.fld .bytes {
+  display: flex;
+  gap: 2px;
+}
+.fld .bytes i {
+  font: 500 12.5px/1 var(--font-mono);
+  font-style: normal;
+  padding: 5px 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--fc) 14%, transparent);
+  color: var(--fc);
+}
+.fld small {
+  font: 500 9px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--moss);
+  text-transform: uppercase;
+}
+.decode {
+  margin: 0;
+  padding: 6px 18px 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 16px;
+  font: 400 11.5px/1.25 var(--font-mono);
+  border-bottom: 1px solid var(--line-2);
+}
+.decode dt,
+.decode dd {
+  padding: 5px 0;
+  margin: 0;
+  border-bottom: 1px dashed var(--line-2);
+}
+.decode dt {
+  color: var(--moss);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 10.5px;
+}
+.decode dd {
+  overflow-wrap: anywhere;
+}
+.pklog {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  overflow: auto;
+  max-height: 150px;
+  font: 400 11px/1.2 var(--font-mono);
+}
+.pklog li {
+  display: grid;
+  grid-template-columns: 7ch 6ch minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 6px 18px;
+  cursor: pointer;
+  color: var(--moss);
+  align-items: center;
+}
+.pklog li:hover {
+  background: var(--pine-2);
+}
+.pklog li.on {
+  background: var(--pine-2);
+  color: var(--fog);
+}
+.pklog .ty {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.pklog .ty.a {
+  color: var(--flare);
+}
+.pklog .hx {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Serranode panel */
+.panel {
+  min-width: 0;
+  display: grid;
+  background: var(--pine);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.panel-head {
+  padding: 18px 20px 16px;
+  display: grid;
+  gap: 10px;
+  border-bottom: 1px solid var(--line-2);
+}
+.panel-head .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.panel-head .row svg.logo {
+  height: 20px;
+}
+.panel-head h2 {
+  margin: 0;
+  font: 600 32px/1.02 var(--font-sans);
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.reading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font: 500 12.5px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.reading .slash {
+  color: var(--moss);
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fog);
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+}
+.pill i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--moss);
+}
+.pill.alert i {
+  background: var(--flare);
+}
+.pill.confirm i {
+  background: color-mix(in srgb, var(--flare) 55%, transparent);
+}
+.pill.low i {
+  background: transparent;
+  border: 1.5px solid var(--fog);
+}
+/* Pico 2 W illustration with the node label and the status LED */
+.device {
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid var(--line-2);
+  display: grid;
+  gap: 14px;
+}
+.node-label {
+  background: var(--night);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: grid;
+  gap: 12px;
+}
+.node-label .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.node-label .row svg.logo {
+  height: 16px;
+}
+.node-label .big {
+  font: 400 40px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+}
+.node-label p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--moss);
+}
+.board svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.board-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  font: 500 10px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+#led {
+  animation: led 2.4s infinite;
+}
+@keyframes led {
+  0%,
+  70%,
+  100% {
+    opacity: 0.25;
+  }
+  75%,
+  88% {
+    opacity: 1;
+  }
+}
+/* Audio waveform of the selected node (canvas drawn by drawWave()) */
+.wave {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--line-2);
+  display: grid;
+  gap: 9px;
+}
+.wave .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+.wave canvas {
+  width: 100%;
+  height: 80px;
+  display: block;
+  border-radius: 8px;
+  background: var(--night);
+}
+#wave-cap {
+  font: 500 10.5px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+  text-align: right;
+}
+/* Node facts: location, battery, unique ID, telemetry */
+.facts-list {
+  margin: 0;
+  padding: 0 20px 14px;
+  display: grid;
+  align-content: start;
+}
+.fact {
+  display: grid;
+  gap: 7px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-2);
+}
+.fact:last-child {
+  border-bottom: 0;
+}
+.fact dd {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.fact .big {
+  font: 600 21px/1.15 var(--font-sans);
+  letter-spacing: -0.03em;
+}
+.fact .sub {
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--moss);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.batt {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.batt-num {
+  font: 600 36px/1 var(--font-sans);
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  min-width: 3.1ch;
+}
+.batt-num small {
+  font: 500 14px/1 var(--font-mono);
+  color: var(--moss);
+  margin-left: 3px;
+}
+.cells {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 3px;
+  height: 20px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  position: relative;
+}
+.cells::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 5px;
+  width: 3px;
+  height: 8px;
+  background: var(--line-2);
+  border-radius: 0 2px 2px 0;
+}
+.cells i {
+  background: var(--night);
+  border-radius: 2px;
+  transition: background 0.4s ease;
+}
+.cells i.on {
+  background: var(--moss);
+}
+.cells.full i.on {
+  background: var(--fog);
+}
+.uid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.uid code {
+  font: 500 15px/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.copy {
+  margin-left: auto;
+  flex: none;
+  background: none;
+  border: 1px solid var(--line-2);
+  color: var(--moss);
+  border-radius: 999px;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.copy:hover {
+  color: var(--fog);
+  border-color: var(--moss);
+}
+.tele {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-radius: 10px;
+  background: var(--night);
+}
+.tele div {
+  padding: 11px 12px 10px;
+  display: grid;
+  gap: 6px;
+}
+.tele div + div {
+  border-left: 1px solid var(--line-2);
+}
+.tele b {
+  font: 500 15px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.swap {
+  animation: swap 0.35s ease-out;
+}
+@keyframes swap {
+  from {
+    opacity: 0.2;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Rescuer mode: Fog ground for daylight */
+.rescuer {
+  display: grid;
+  gap: 14px;
+  max-width: 620px;
+  width: 100%;
+  margin: 0 auto;
+}
+/* Rescuer cards: .fog for the alert (readable in daylight), .pine for the quieter cards */
+.r-card {
+  border-radius: 18px;
+  padding: 22px;
+  display: grid;
+  gap: 18px;
+}
+.r-card.fog {
+  background: var(--fog);
+  color: var(--night);
+}
+.r-card.pine {
+  background: var(--pine);
+}
+.r-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.r-head .fdot {
+  width: 18px;
+  height: 18px;
+  animation: call 1.6s infinite;
+}
+.r-head .fdot.ack {
+  background: transparent;
+  border: 3px solid var(--night);
+  animation: none;
+}
+.r-head h2 {
+  margin: 0;
+  font: 600 clamp(38px, 10vw, 56px)/1 var(--font-sans);
+  letter-spacing: -0.035em;
+}
+.r-state {
+  font: 500 11.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ember);
+}
+.r-card.pine .r-state {
+  color: var(--moss);
+}
+.r-dir {
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+}
+.r-dir svg {
+  width: 100%;
+  height: auto;
+}
+.r-bearing {
+  font: 600 clamp(52px, 14vw, 84px)/0.9 var(--font-sans);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.r-bearing small {
+  font: 500 0.3em/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  color: var(--stone);
+  margin-left: 8px;
+}
+.r-dist {
+  font: 500 13px/1.5 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--stone);
+  margin-top: 8px;
+}
+.r-line {
+  font: 400 17px/1.5 var(--font-sans);
+}
+.r-line.muted {
+  color: var(--stone);
+  font-size: 15px;
+}
+.r-card.pine .r-line.muted {
+  color: var(--moss);
+}
+.r-readings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--stone) 30%, transparent);
+}
+.r-readings span {
+  display: block;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--stone);
+  margin-bottom: 6px;
+}
+.r-readings b {
+  font: 500 16px/1 var(--font-mono);
+}
+.r-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.r-actions .btn {
+  padding: 18px 14px;
+  font-size: 16px;
+}
+.r-nodes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+}
+.r-nodes li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 16px;
+}
+.r-nodes li span:last-child {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--moss);
+}
+
+@media (max-width: 1100px) {
+  .stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .stat:nth-child(5) {
+    border-left: 0;
+  }
+  .stat:nth-child(n + 5) {
+    border-top: 1px solid var(--line-2);
+  }
+}
+@media (max-width: 1000px) {
+  .welcome-inner {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+  .boot ol {
+    min-height: 0;
+  }
+  .dock {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alert-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alert-actions {
+    justify-content: flex-start;
+  }
+  .alert-card .readings {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 20px;
+  }
+}
+@media (max-width: 640px) {
+  .corner .label:nth-child(2) {
+    display: none;
+  }
+  .facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .facts div:nth-child(3) {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .facts div:nth-child(n + 3) {
+    padding-top: 14px;
+  }
+  .lede {
+    font-size: 16px;
+    line-height: 25px;
+  }
+  .hud.bl,
+  .kbd {
+    display: none;
+  }
+  .map {
+    height: auto;
+    aspect-ratio: 3 / 3.4;
+    max-width: 100%;
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat:nth-child(odd) {
+    border-left: 0;
+  }
+  .stat:nth-child(even) {
+    border-left: 1px solid var(--line-2);
+  }
+  .stat:nth-child(n + 4) {
+    border-top: 1px solid var(--line-2);
+  }
+  .replay {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .replay .label,
+  .replay-title {
+    display: none;
+  }
+  .picker .right {
+    margin-left: 0;
+  }
+  .r-dir {
+    grid-template-columns: minmax(0, 116px) minmax(0, 1fr);
+    gap: 16px;
+  }
+  .r-readings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .brand .sep,
+  .brand .label {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

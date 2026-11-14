@@ -1,11 +1,12 @@
-// Playwright end-to-end tests for the dashboard mockup.
-//   npm run test:e2e         headless, Chromium desktop + phone
+// Playwright end-to-end tests for the Next.js dashboard.
+//   npm run test:e2e         builds the app, serves it on :3100, runs Chromium desktop + phone
 //   npm run test:e2e:ui      interactive runner
 // First time only: npx playwright install chromium
+// While `npm run dev` is running on :3100 (PORT=3100), the tests reuse it instead of building.
 
 import { defineConfig, devices } from '@playwright/test';
 
-const PORT = 4173;
+const PORT = 3100;
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -26,10 +27,11 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'phone', use: { ...devices['Pixel 7'] }, testMatch: /rescuer\.spec\.js/ },
   ],
+  // A production build, so the tests see what the base station will serve.
   webServer: {
-    command: 'node scripts/serve.mjs',
+    command: `npm run build && npx next start --hostname 127.0.0.1 --port ${PORT}`,
     url: `http://127.0.0.1:${PORT}/`,
     reuseExistingServer: !process.env.CI,
-    env: { PORT: String(PORT) },
+    timeout: 240_000,
   },
 });

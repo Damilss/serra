@@ -1,4 +1,8 @@
 node_modules/
+.next/
+out/
+next-env.d.ts
+src/components/brand/paths.ts
 package-lock.json
 test-results/
 playwright-report/
