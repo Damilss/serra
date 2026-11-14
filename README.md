@@ -7,7 +7,7 @@
 
 # Serra
 
-**Off-grid search and rescue mesh.** Serra is the system: **Serranodes** (Raspberry Pi Pico 2 W) form the **Serranet** mesh. Serranodes run a custom low-power runtime and an on-device AI classifier that detects distress whistles. Alerts hop across a BLE mesh to a Pi 5 base station, which maps which node heard it, guiding rescuers to lost hikers where there's no cell service. No cloud, no internet.
+**Off-grid search and rescue mesh.** Serra is the system: **Serranodes** (Raspberry Pi Pico 2 W) form the **Serranet** mesh. Serranodes run a custom low-power runtime and an on-device AI classifier that detects distress whistles. Alerts hop across a BLE mesh to a base station (a Pi 5 listening over BLE, plugged into a laptop over USB), which maps which node heard it, guiding rescuers to lost hikers where there's no cell service. No cloud, no internet.
 
 > Built over a weekend at an AI hackathon by a team that would rather write firmware than another SaaS wrapper.
 
@@ -48,18 +48,20 @@ Everything runs locally. Out there, the cloud isn't an option.
 ```
    Field (battery-powered Serranodes)                 Ranger station / trailhead
 
-   [Node 1] ))) [Node 2] ))) [Node 3] ))) BLE ))) [ Pi 5 base station ]
+   [Node 1] ))) [Node 2] ))) [Node 3] ))) BLE ))) [ Pi 5 BLE receiver ]
                     ^                                      |
-                    |                                      v
-      whistle / scream / "help" heard here        Map dashboard over local Wi-Fi
-                                                  (open on any phone, no internet)
+                    |                              USB-C (USB gadget:
+      whistle / scream / "help" heard here          Ethernet over USB)
+                                                           v
+                                                  [ Laptop: Supabase + dashboard ]
+                                                  (localhost, no internet)
 ```
 
 1. **Listen cheaply.** Each node samples its microphone using a cheap loudness/frequency check that runs almost all the time.
 2. **Classify rarely.** When the check fires, the node wakes the AI classifier, which decides whether it's a whistle, a scream, someone shouting "help", or nothing to worry about (and how confident it is).
 3. **Alert.** On a positive detection, the node builds a small alert packet (node ID, sequence number, class, confidence, loudness in dB, time) and broadcasts it over BLE.
 4. **Hop.** Every node that hears a new alert re-broadcasts it, so it floods across the mesh until it reaches the base station.
-5. **Locate.** The Pi 5 base station collects alerts and lights up the node(s) that heard the call on a map. If several nodes heard it, the loudest one gives a rough location.
+5. **Locate.** The Pi 5 hears the alerts and passes them over USB to the laptop, whose dashboard lights up the node(s) that heard the call on a map. If several nodes heard it, the loudest one gives a rough location.
 
 ---
 
@@ -69,7 +71,8 @@ Everything runs locally. Out there, the cloud isn't an option.
 |---|---|---|
 | Raspberry Pi Pico 2 W | 3+ | Field nodes |
 | INMP441 I2S MEMS microphone | 1 per node | Audio input; the Pico has no built-in mic. L/R pin tied to GND (left channel) |
-| Raspberry Pi 5 | 1 | Base station, extra BLE node, dashboard host |
+| Raspberry Pi 5 | 1 | Base station BLE receiver; runs in USB gadget mode, plugged into the laptop |
+| Laptop | 1 | Base station host: Supabase (Docker) and the dashboard on localhost; powers the Pi 5 over USB-C |
 | Batteries / USB power banks | 1 per node | Field power |
 
 **Pico 2 W at a glance:** RP2350 microcontroller with a choice of dual Arm Cortex-M33 or dual Hazard3 RISC-V cores (we build for Arm), 520 KB SRAM, 4 MB flash, PIO state machines, and an Infineon CYW43439 radio (2.4 GHz Wi-Fi + Bluetooth LE).
@@ -102,12 +105,20 @@ Everything runs locally. Out there, the cloud isn't an option.
 +---------------------------------------------------------+
 ```
 
-### Base station (Raspberry Pi 5, Python)
+### Base station (Raspberry Pi 5 + laptop)
 
 ```
-BLE scanner (bleak) -> packet decoder -> dedup by msg_id -> alert store -> web dashboard (map)
-                                                                     \-> optional: local LLM summaries
+Raspberry Pi 5 (USB gadget)                      Laptop (localhost)
++--------------------------------+  USB-C link  +------------------------------------------+
+| BLE scanner (bleak)            |  Ethernet    | Supabase (Postgres, Docker)              |
+|  -> packet decoder             |  over USB    |  -> Realtime -> web dashboard (map)      |
+|  -> dedup by (src, msg_id)     | -----------> |                                          |
+|  -> event grouping             |              | optional: local LLM summaries            |
+|  -> writes rows (service_role) |              |                                          |
++--------------------------------+              +------------------------------------------+
 ```
+
+The Pi 5 runs in **USB gadget mode** on its USB-C port: plugged into the laptop it shows up as a USB Ethernet adapter, so the two have a private point-to-point network with no Wi-Fi or router involved. The same cable powers the Pi. The BLE listener on the Pi writes to the laptop's Supabase over that link; everything else (database, dashboard, LLM) lives on the laptop and is opened at `localhost`.
 
 ---
 
@@ -198,12 +209,16 @@ This was the biggest change during ideation. The original plan was to interlink 
 
 ### 8. Raspberry Pi 5 as the base station
 
-**Decision:** The Pi 5 is the base station (and the fourth node), instead of a Pico tethered to a laptop.
+**Decision:** The Pi 5 is the base station's radio: it listens to the mesh over BLE and runs the listener/decoder. It runs in **USB gadget mode** (Ethernet over USB) and plugs into a **laptop**, which hosts Supabase and the dashboard on `localhost`. This replaces the earlier plan of the Pi hosting the dashboard on its own Wi-Fi hotspot.
 
 **Why:**
-- It has **built-in Bluetooth LE**, so it can listen to the mesh directly.
-- It can **host the dashboard** on its own local Wi-Fi. Judges or rescuers open it on a phone, no internet needed.
-- It matches a realistic deployment: **one powered hub** at a ranger station or trailhead, **many low-power nodes** on batteries in the field.
+- The Pi has **built-in Bluetooth LE**, so it can listen to the mesh directly, with no Pico tethered to the laptop as a gateway.
+- **Supabase is heavy** (about ten Docker containers, about 2 GB of images). It runs comfortably on a laptop; on the Pi it would compete with the BLE listener for RAM and CPU.
+- **One cable, no network setup.** USB gadget mode gives a fixed point-to-point link and powers the Pi. There's no hotspot, no venue Wi-Fi and no IP discovery, which makes for a more reliable demo.
+- The dashboard is developed and shown on the same machine (`localhost`), so there's no deploy step to the Pi.
+- It still matches a realistic deployment: **one powered hub** (a laptop and receiver at a ranger station or trailhead), **many low-power nodes** on batteries in the field.
+
+**Trade-off:** phones no longer open the dashboard straight from the Pi. Showing it on a phone means sharing the laptop's dashboard on a local network, which is optional and not part of the core demo.
 
 ### 9. Localization by loudest node
 
@@ -358,14 +373,19 @@ The INMP441 sends 24-bit samples MSB-first inside 32-bit I2S slots. With L/R tie
 
 ## Base station
 
-Runs on the Raspberry Pi 5.
+Split across two machines joined by one USB-C cable (see [decision 8](#8-raspberry-pi-5-as-the-base-station)):
+
+- **Raspberry Pi 5:** BLE listener, decoder, dedup and event grouping (Python + `bleak`). Runs in USB gadget mode and writes to Supabase on the laptop over the USB link with the `service_role` key.
+- **Laptop:** Supabase (Postgres + Realtime, in Docker) and the dashboard, both on `localhost`, plus the optional LLM.
+
+What it does:
 
 - **Start listen-only.** Scan for BLE advertisements and decode Serranet packets (Python + `bleak`).
 - **Same packet format** as the Picos, including **dedup by `(src, msg_id)`**, since the same alert arrives via several paths.
 - **Group events.** Alerts of the same class from different nodes that arrive within about 2 seconds of each other are treated as one event heard by several nodes. Node timestamps are uptime and aren't compared across nodes.
-- **Dashboard.** A web page served by the Pi, showing a map of node positions. Nodes light up when they report a detection, labeled whistle / scream / help; the loudest (calibrated dB) is highlighted as the likely location.
-- **Local network.** The Pi hosts its own Wi-Fi so anyone nearby can open the dashboard on a phone without internet.
-- **Optional:** a small local model on the Pi turns raw alerts into plain language, e.g. *"Repeated distress whistle near node 3, 12:41, likely 3 blasts."* or *"Someone shouted 'help' near node 2, 12:43."*
+- **Dashboard.** A web page served on the laptop at `localhost`, reading Supabase with live updates through Realtime, and showing a map of node positions. Nodes light up when they report a detection, labeled whistle / scream / help; the loudest (calibrated dB) is highlighted as the likely location.
+- **No internet.** The Pi-to-laptop link is USB, and Supabase and the dashboard run locally. Pull the Supabase Docker images before the event; after that it all starts offline.
+- **Optional:** a small local model on the laptop turns raw alerts into plain language, e.g. *"Repeated distress whistle near node 3, 12:41, likely 3 blasts."* or *"Someone shouted 'help' near node 2, 12:43."*
 
 ---
 
@@ -392,6 +412,7 @@ Runs on the Raspberry Pi 5.
 - **"Help" is English-only** and tuned to the voices we trained on. The volunteer takes help in the room, but other voices, accents and languages will be weaker.
 - **Scream data.** We don't yet have a scream dataset with a clear license; for now it's in-room recordings.
 - **Localization is coarse.** "Which node heard it loudest" gives an area, not a point, and it relies on the one-time gain calibration.
+- **Base station power.** The Pi 5 is powered from the laptop's USB-C port. A laptop port supplies less than the Pi's official 5 V / 5 A supply, so the Pi limits its USB peripheral current and may warn about power. That's fine for a BLE listener with nothing plugged in, but test it on the demo laptop.
 - **Time sync.** Timestamps are per-node uptime, not synced. The base station groups alerts by arrival time instead (see [decision 9](#9-localization-by-loudest-node)).
 
 ---
@@ -429,7 +450,7 @@ serra/
 │   ├── data/                # recordings (large files not committed)
 │   └── train.py
 ├── serra_brand/         # Serra brand kit: logos (SVG/PNG), brand PDF, colors, type
-├── base-station/            # Pi 5: BLE listener + dashboard
+├── base-station/            # Pi 5 BLE listener; laptop Supabase + dashboard
 ├── scripts/
 │   ├── install-firmware-tooling.sh  # toolchain + Pico SDK setup (macOS, apt Linux)
 │   └── pico_setup.sh        # Raspberry Pi's full SDK/OpenOCD setup on the Pi 5

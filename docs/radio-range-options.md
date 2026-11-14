@@ -60,7 +60,7 @@ What's already in `firmware/CMakeLists.txt`: BTstack over the CYW43439, flooding
 
 **Pros**
 - No extra hardware; works on the boards we have.
-- The Pi 5 hears it with its built-in Bluetooth ([decision 8](../README.md#8-raspberry-pi-5-as-the-base-station)), and a phone running nRF Connect can stand in as a node.
+- The Pi 5 (the base station's receiver, plugged into the laptop) hears it with its built-in Bluetooth ([decision 8](../README.md#8-raspberry-pi-5-as-the-base-station)), and a phone running nRF Connect can stand in as a node.
 - An advertisement is about 0.4 ms on air per channel (*computed*)[^ble-airtime], so collisions are rare and a few ms of flooding jitter is enough.
 - Low current when the scan duty cycle is low[^cyw43439].
 
