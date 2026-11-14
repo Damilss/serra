@@ -7,9 +7,10 @@
  * handled in core 0. mesh handles the flooding, the deduplication of the
  * payloads. TTL, and jitter
  *
- * for now: node ID, sequence numbers, sending alerts, dedup on
- * (src, msg_id), and logging what is heard. TTL relaying and jitter come
- * next.
+ * node ID, sequence numbers, sending alerts, dedup on (src, msg_id), and
+ * flooding: every new packet with hops left is relayed once, with ttl - 1,
+ * after a random jitter. a test block list ignores chosen neighbors so
+ * multi-hop can be forced on a desk.
  */
 #ifndef MESH_MESH_H
 #define MESH_MESH_H
@@ -44,5 +45,27 @@ uint16_t mesh_node_id(void);
  * return: 0 on success, -1 if @alert is NULL or the queue rejected it.
  */
 int mesh_send_alert(const alert_payload_t *alert);
+
+/**
+ * mesh_block - ignore every packet transmitted by one radio (testing)
+ * @tag: BLE_TAG() of the radio, as printed in "[ble] up ... (tag xxxx)"
+ *
+ * blocks by transmitter, not by origin: a relayed copy of the same node's
+ * alert still gets through if a non-blocked neighbor sends it. that's
+ * what forces A -> B -> C when all boards sit on one desk.
+ *
+ * return: 0 on success (or already blocked), -1 if the list is full.
+ */
+int mesh_block(uint16_t tag);
+
+/**
+ * mesh_unblock_all - clear the test block list
+ */
+void mesh_unblock_all(void);
+
+/**
+ * mesh_print_status - print node ID, counters and the block list
+ */
+void mesh_print_status(void);
 
 #endif /* MESH_MESH_H */

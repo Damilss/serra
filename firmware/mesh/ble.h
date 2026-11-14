@@ -18,16 +18,26 @@
 #include <stdint.h>
 
 /**
+ * BLE_TAG - 16-bit tag for a radio: the last two bytes of its BLE address
+ * @addr: a BTstack bd_addr_t, in the order bd_addr_to_str() prints it
+ *
+ * "2C:CF:67:12:4A:9E" -> 0x4A9E. used to name the neighbor that transmitted
+ * a packet, which for a relayed packet is not its origin (@src).
+ */
+#define BLE_TAG(addr) ((uint16_t)(((addr)[4] << 8) | (addr)[5]))
+
+/**
  * ble_rx_cb_t - called for every Serranet packet heard while scanning
  * @pkt: the packet, starting at mesh_pkt_t.magic; only valid during the call
  * @len: bytes in @pkt, at least sizeof(mesh_pkt_t)
  * @rssi: received signal strength in dBm
+ * @from: BLE_TAG() of the radio that transmitted this copy
  *
  * runs on core 0 from the main loop's cyw43_arch_poll(). fires on
  * every advertisement, so the same packet arrives many times; dedup is the
  * mesh layer's job.
  */
-typedef void (*ble_rx_cb_t)(const uint8_t *pkt, uint8_t len, int8_t rssi);
+typedef void (*ble_rx_cb_t)(const uint8_t *pkt, uint8_t len, int8_t rssi, uint16_t from);
 
 /**
  * ble_init - start BTstack, then scan for Serranet packets

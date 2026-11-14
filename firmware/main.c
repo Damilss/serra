@@ -7,8 +7,8 @@
 #include <stdio.h>
 
 #include "blink_light/blink_light.h"
+#include "mesh/console.h"
 #include "mesh/mesh.h"
-#include "pico/async_context.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
 
@@ -16,37 +16,6 @@
  * BLINK_PERIOD_MS - LED toggle interval; 1000 ms = one blink every 2 s
  */
 #define BLINK_PERIOD_MS 1000
-
-/**
- * TEST_BEACON_PERIOD_MS - how often the test beacon sends a fake alert
- */
-#define TEST_BEACON_PERIOD_MS 1000
-
-/**
- * test_beacon_send - send a fake whistle alert, then schedule the next one
- * @context: the cyw43 async_context the worker runs on
- * @worker: this worker; re-added to repeat
- *
- * TEMPORARY: stands in for the classifier so node-to-node BLE can be tested
- * before audio exists. remove once real alerts come from core 1.
- */
-static void test_beacon_send(async_context_t *context, async_at_time_worker_t *worker) {
-	alert_payload_t alert = {
-		.class_id = CLASS_WHISTLE,
-		.confidence = 200,
-		.peak_level = 853,
-		.timestamp = to_ms_since_boot(get_absolute_time()),
-		.blast_count = 3,
-	};
-
-	mesh_send_alert(&alert);
-	printf("[main] queued node=0x%04x ts=%lu\n", mesh_node_id(), (unsigned long)alert.timestamp);
-	async_context_add_at_time_worker_in_ms(context, worker, TEST_BEACON_PERIOD_MS);
-}
-
-static async_at_time_worker_t test_beacon_worker = {
-	.do_work = test_beacon_send,
-};
 
 /**
  * main - bring up stdio and the radio chip, add workers, run the main loop
@@ -77,9 +46,9 @@ int main(void) {
 		return 1;
 	}
 
-	if (!async_context_add_at_time_worker_in_ms(cyw43_arch_async_context(), &test_beacon_worker,
-												TEST_BEACON_PERIOD_MS)) {
-		printf("[main] test beacon failed to start\n");
+	/* TEMPORARY: serial test commands + fake alerts until audio exists */
+	if (console_init()) {
+		printf("[main] console_init failed\n");
 		return 1;
 	}
 
