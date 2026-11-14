@@ -5,4 +5,3 @@
  * file: classifier.c
  */
 #include "classifier.h"
-

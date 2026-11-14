@@ -10,7 +10,4 @@
 #ifndef RUNTIME_IPC_H
 #define RUNTIME_IPC_H
 
-
 #endif /* RUNTIME_IPC_H */
-
-

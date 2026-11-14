@@ -31,7 +31,7 @@ typedef struct sched_task_func {
 	void *ctx;
 	uint32_t period_ms;
 
-}sched_task_func_t;
+} sched_task_func_t;
 
 /**
  * sched_add - register a task.

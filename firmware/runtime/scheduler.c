@@ -41,9 +41,7 @@ static int num_slots;
  *
  * an interrupt or the other core's __sev() can wake it early.
  */
-static void wfe_until(absolute_time_t until) {
-	best_effort_wfe_or_timeout(until);
-}
+static void wfe_until(absolute_time_t until) { best_effort_wfe_or_timeout(until); }
 
 static const sched_idle_t default_idle = {
 	.poll = NULL,

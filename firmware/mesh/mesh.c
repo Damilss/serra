@@ -56,8 +56,8 @@ static void on_ble_rx(const uint8_t *pkt, uint8_t len, int8_t rssi) {
 	if (hdr.src == node_id)
 		return;
 
-	printf("[mesh] rx src=0x%04x msg_id=%u ttl=%u type=%u rssi=%d", hdr.src, hdr.msg_id,
-		   hdr.ttl, hdr.type, rssi);
+	printf("[mesh] rx src=0x%04x msg_id=%u ttl=%u type=%u rssi=%d", hdr.src, hdr.msg_id, hdr.ttl,
+		   hdr.type, rssi);
 
 	if (hdr.type == MESH_TYPE_ALERT && len >= sizeof(mesh_pkt_t) + sizeof(alert_payload_t)) {
 		alert_payload_t alert;
@@ -90,9 +90,7 @@ int mesh_init(void) {
  *
  * return: the ID set by mesh_init().
  */
-uint16_t mesh_node_id(void) {
-	return node_id;
-}
+uint16_t mesh_node_id(void) { return node_id; }
 
 /**
  * mesh_send_alert - originate an alert and start advertising it

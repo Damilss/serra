@@ -10,5 +10,4 @@
 #ifndef RUNTIME_NODE_STATE_H
 #define RUNTIME_NODE_STATE_H
 
-
 #endif /* RUNTIME_NODE_STATE_H */
