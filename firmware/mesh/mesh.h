@@ -7,8 +7,9 @@
  * handled in core 0. mesh handles the flooding, the deduplication of the
  * payloads. TTL, and jitter
  *
- * for now: node ID, sequence numbers, sending alerts and logging what is
- * heard. dedup, TTL relaying and jitter come next.
+ * for now: node ID, sequence numbers, sending alerts, dedup on
+ * (src, msg_id), and logging what is heard. TTL relaying and jitter come
+ * next.
  */
 #ifndef MESH_MESH_H
 #define MESH_MESH_H
