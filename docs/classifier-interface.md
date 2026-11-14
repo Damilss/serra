@@ -8,7 +8,7 @@ Handoff from the model side to the firmware side. Covers the mic, the runtime th
 
 | | |
 |---|---|
-| Part | TDK InvenSense **INMP441**, omnidirectional MEMS mic on a 6-pin breakout. Ours: the round JESSINIE 3-pack module; pin labels on the back, headers ship loose and need soldering |
+| Part | TDK InvenSense **INMP441**, omnidirectional MEMS mic on a 6-pin breakout. Ours: the round JESSINIE 3-pack module; pin labels on the back, headers ship loose. **Headers soldered; ready to wire up** |
 | Clone check | Cheap modules sometimes carry a pin-compatible clone chip. If a module reads only zeros at SCK 1.024 MHz, run SCK at 2.048 MHz (32 kHz) and decimate to 16 kHz in software |
 | Interface | **I2S** (not UART/SPI/I2C), 24-bit two's complement, MSB first, 64 SCK cycles per stereo frame (32 per slot) |
 | Pins | `VDD`, `GND`, `SCK` (bit clock, Pico drives), `WS` (word select / LR clock, Pico drives), `SD` (data out from mic), `L/R` (channel select) |
