@@ -1,12 +1,55 @@
 /**
- * authors: Emilio Scott <milii76@outlook.com>
+ * authors: Emilio Scott <milii76@outlook.com>,
+ *			Elias Santillan <emsantil@calpoly.edu>
  * date: 2026-11-14
  * file: ble.h
  *
  * ble will run on core 0. BTstack advertise and scan wrapper functions
  * will go here.
+ *
+ * thin layer over BTstack: puts a Serranet packet in a non-connectable
+ * advertisement and hands Serranet packets heard while scanning to a
+ * callback. knows the advertisement framing (flags, manufacturer data,
+ * MESH_COMPANY_ID, MESH_MAGIC) but nothing about flooding; that's mesh.c.
  */
-#ifndef RUNTIME_BLE_H
-#define RUNTIME_BLE_H
+#ifndef MESH_BLE_H
+#define MESH_BLE_H
+#include <stdint.h>
 
-#endif /* RUNTIME_BLE_H */
+/**
+ * ble_rx_cb_t - called for every Serranet packet heard while scanning
+ * @pkt: the packet, starting at mesh_pkt_t.magic; only valid during the call
+ * @len: bytes in @pkt, at least sizeof(mesh_pkt_t)
+ * @rssi: received signal strength in dBm
+ *
+ * runs on core 0 from the scheduler loop's cyw43_arch_poll(). fires on
+ * every advertisement, so the same packet arrives many times; dedup is the
+ * mesh layer's job.
+ */
+typedef void (*ble_rx_cb_t)(const uint8_t *pkt, uint8_t len, int8_t rssi);
+
+/**
+ * ble_init - start BTstack, then scan for Serranet packets
+ * @on_rx: called for each Serranet packet heard
+ *
+ * call after cyw43_arch_init() and sched_set_idle(), since BTstack only
+ * runs when the scheduler loop polls the radio. scanning starts once the
+ * stack is up (HCI_STATE_WORKING), a moment after sched_run() starts.
+ *
+ * return: 0 on success, -1 if @on_rx is NULL or BTstack failed to power on.
+ */
+int ble_init(ble_rx_cb_t on_rx);
+
+/**
+ * ble_advertise - advertise @pkt until the next call replaces it
+ * @pkt: a Serranet packet, starting at mesh_pkt_t.magic; copied
+ * @len: bytes in @pkt, at most MESH_ADV_BUDGET
+ *
+ * the first call turns advertising on. safe to call before the stack is
+ * up; BTstack applies it once it is.
+ *
+ * return: 0 on success, -1 if @pkt is NULL or @len is too big.
+ */
+int ble_advertise(const void *pkt, uint8_t len);
+
+#endif /* MESH_BLE_H */

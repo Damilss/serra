@@ -27,10 +27,11 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 | SDK smoke test: `picow_blink` (onboard LED through the CYW43) | Builds; **not yet run on a Pico 2 W** |
 | SDK smoke test: `ble_temp_server` (BLE advertising) | Builds; **not yet run on a Pico 2 W** |
 | INMP441 mic hardware | Headers soldered, ready to wire (pins proposed in [`docs/classifier-interface.md`](../docs/classifier-interface.md#1-microphone-inmp441)); **not yet read by firmware** |
-| BLE advertise test with our packet format | Not started |
-| Our firmware (`node.uf2`): `main.c` + `runtime/scheduler` + `blink_light` | **Runs on a Pico 2 W**: LED toggles every 500 ms, so the scheduler, the build and the CYW43 radio chip all work |
-| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Linked and builds; not yet used by our code |
-| `runtime/ipc`, `runtime/node_state`, `audio/`, `classifier/`, `mesh/` | Empty placeholders |
+| BLE advertise test with our packet format | **Works on 2 × Pico 2 W (2026-11-14)**: each board advertises a test alert every second and the other decodes it over the air (`[mesh] rx src=...` on serial) |
+| Our firmware (`node.uf2`): `main.c` + `runtime/scheduler` + `blink_light` + `mesh/` | **Runs on a Pico 2 W**: LED toggles every 500 ms; the scheduler loop polls the radio through `sched_set_idle()` hooks |
+| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Used by `mesh/ble.c`: non-connectable advertising + passive scan, filtered on company ID `0xFFFF` and `MESH_MAGIC` |
+| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, logs received packets. **No dedup or relaying yet**; `main.c` runs a temporary 1 s test beacon |
+| `runtime/ipc`, `runtime/node_state`, `audio/`, `classifier/` | Empty placeholders |
 
 ---
 
@@ -41,7 +42,7 @@ firmware/
 ├── CMakeLists.txt     # SDK build for PICO_BOARD=pico2_w
 ├── btstack_config.h   # (planned) BTstack options; the pico_btstack_* libraries require it
 ├── main.c             # application entry
-├── runtime/           # scheduler / power management (planned)
+├── runtime/           # scheduler (polls the radio via sched_set_idle hooks); power management planned
 ├── audio/             # mic capture, wake trigger (planned)
 ├── classifier/        # int8 model + inference (planned)
 ├── mesh/              # BLE flooding (planned)
