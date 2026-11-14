@@ -3,6 +3,8 @@
 Compiles firmware/classifier/features.c and the vendored TFLM microfrontend into a shared
 library and calls it through ctypes. Training therefore uses the very code that runs on the
 Pico, so there is no second implementation to drift out of step.
+
+    uv run features.py      # smoke test: build the library and run a 3 kHz tone through it
 """
 
 from __future__ import annotations

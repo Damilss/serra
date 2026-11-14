@@ -1,31 +1,35 @@
+; author: Tobias Halpern <62962933+TobiasH453@users.noreply.github.com>
+; date: 2026-11-14
+; file: i2s_mic.pio
+;
 ; I2S receiver for the INMP441 mic: the Pico drives SCK and WS and shifts in SD.
 ;
-; One program loop is one stereo frame: 64 SCK cycles, two instructions per cycle (SCK low,
-; then SCK high). Run the state machine at 128 x the sample rate.
+; one program loop is one stereo frame: 64 SCK cycles, two instructions per cycle (SCK low,
+; then SCK high). run the state machine at 128 x the sample rate.
 ;
-; Side-set pins: bit 0 = SCK, bit 1 = WS (so WS is the GPIO after SCK).
-; Input pin:     SD.
+; side-set pins: bit 0 = SCK, bit 1 = WS (so WS is the GPIO after SCK).
+; input pin:     SD.
 ;
-; I2S puts a word's first bit one SCK cycle after WS changes. So WS goes low one cycle
-; before the left slot's first bit and high one cycle before the right slot's. With the
+; I2S puts a word's first bit one SCK cycle after WS changes. so WS goes low one cycle
+; before the left slot's first bit and high one cycle before the right slot's. with the
 ; mic's L/R pin on GND it talks in the left slot: we shift in those 32 bits (24 data bits,
-; MSB first, then 8 empty ones) and push one word per frame. The right slot is clocked but
-; not read. Autopush at 32 bits, shift left, so a word is (sample << 8).
+; MSB first, then 8 empty ones) and push one word per frame. the right slot is clocked but
+; not read. autopush at 32 bits, shift left, so a word is (sample << 8).
 
 .program i2s_mic
 .side_set 2
 
 .wrap_target
-	set x, 29           side 0b00   ; cycle 0, SCK low
+	set x, 29               side 0b00   ; cycle 0, SCK low
 left_slot:
-	in pins, 1          side 0b01   ; SCK high: read bit
-	jmp x-- left_slot        side 0b00   ; SCK low
-	in pins, 1          side 0b01   ; cycle 30: bit 31 of 32
-	set x, 30           side 0b10   ; cycle 31: WS high, one cycle ahead of the right slot
-	in pins, 1          side 0b11   ; bit 32 of 32 -> autopush
+	in pins, 1              side 0b01   ; SCK high: read bit
+	jmp x-- left_slot       side 0b00   ; SCK low
+	in pins, 1              side 0b01   ; cycle 30: bit 31 of 32
+	set x, 30               side 0b10   ; cycle 31: WS high, one cycle ahead of the right slot
+	in pins, 1              side 0b11   ; bit 32 of 32 -> autopush
 right_slot:
-	nop                 side 0b10   ; cycles 32-62: right slot, nothing to read
-	jmp x-- right_slot       side 0b11
-	nop                 side 0b00   ; cycle 63: WS low, one cycle ahead of the left slot
-	nop                 side 0b01
+	nop                     side 0b10   ; cycles 32-62: right slot, nothing to read
+	jmp x-- right_slot      side 0b11
+	nop                     side 0b00   ; cycle 63: WS low, one cycle ahead of the left slot
+	nop                     side 0b01
 .wrap

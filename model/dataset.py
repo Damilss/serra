@@ -87,10 +87,12 @@ def bucket(key: str) -> str:
 
 
 def recording_split(index: int) -> str:
-    """Split for a class's index-th recording, in file-name (so time) order: of every five,
-    the third is test and the fifth is dev. A hash would do for thousands of clips, but with
-    a handful of takes it can leave a class with nothing to test on. Earlier takes keep
-    their side as new ones are added."""
+    """Split for a class's index-th recording, in file-name (so time) order.
+
+    Of every five, the third is test and the fifth is dev. A hash would do for thousands of
+    clips, but with a handful of takes it can leave a class with nothing to test on. Earlier
+    takes keep their side as new ones are added.
+    """
     return {2: "test", 4: "dev"}.get(index % 5, "train")
 
 
@@ -114,8 +116,11 @@ def mswc_items(split: str, rng: np.random.Generator) -> list[tuple[str, str]]:
 
 
 def nonspeech_items(split: str) -> list[tuple[str, str]]:
-    """(class, path) for Nonspeech7k. Re-split by source recording ("File ID"), because
-    its segments are cut from longer files and neighbours must not straddle splits."""
+    """(class, path) for Nonspeech7k.
+
+    Re-split by source recording ("File ID"), because its segments are cut from longer files
+    and neighbours must not straddle splits.
+    """
     root = DATA / "nonspeech7k"
     out = []
     for part in ("train", "test"):
@@ -270,9 +275,12 @@ def window_power(x: np.ndarray, n: int) -> np.ndarray:
 
 
 def place(clip: np.ndarray, rng: np.random.Generator, loudest: bool) -> np.ndarray:
-    """Fit a clip into one second. Long clips are cropped, around their loudest second if
-    `loudest`; short ones are placed at random. Then shifted by up to 200 ms either way,
-    since the node's 1 s window lands on a sound at an arbitrary offset."""
+    """Fit a clip into one second.
+
+    Long clips are cropped, around their loudest second if `loudest`; short ones are placed
+    at random. Then shifted by up to 200 ms either way, since the node's 1 s window lands on
+    a sound at an arbitrary offset.
+    """
     if len(clip) > CLIP:
         if loudest:
             start = int(np.argmax(window_power(clip, CLIP))) + int(rng.integers(-1600, 1601))
@@ -417,7 +425,10 @@ def plan(split: str) -> list[Item]:
 
     # Every example gets its own seed, so repeats of one clip are augmented differently.
     seeds = rng.integers(0, 2**62, size=len(items))
-    return [Item(it.label, it.kind, it.path, it.start, int(s)) for it, s in zip(items, seeds)]
+    return [
+        Item(it.label, it.kind, it.path, it.start, int(s))
+        for it, s in zip(items, seeds, strict=True)
+    ]
 
 
 def main() -> None:

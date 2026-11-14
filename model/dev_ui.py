@@ -35,7 +35,6 @@ import soundfile as sf
 from config import ALERT_CLASSES, CLASSES, MODEL_DIR, OUT, RECORDINGS, SAMPLE_RATE
 from record import FULL_SCALE, PACKET_SAMPLES, find_port, packets
 
-
 TOOLS = MODEL_DIR.parent / "firmware" / "tools"
 FIRMWARE = {
     "record": TOOLS / "mic_capture" / "build" / "mic_capture.uf2",
@@ -179,14 +178,17 @@ class Recorder:
                         self.steps += 1
                         self.inferences += self.ran
                 elif line[0] == "alert" and len(values) == 4 and self.listening:
-                    self.alerts.insert(0, {
-                        "time": datetime.now().strftime("%H:%M:%S"),
-                        "at": time.time(),
-                        "label": CLASSES[values[0] - 1],
-                        "confidence": round(values[1] / 255, 2),
-                        "peak": values[2] / 10,
-                        "blasts": values[3],
-                    })
+                    self.alerts.insert(
+                        0,
+                        {
+                            "time": datetime.now().strftime("%H:%M:%S"),
+                            "at": time.time(),
+                            "label": CLASSES[values[0] - 1],
+                            "confidence": round(values[1] / 255, 2),
+                            "peak": values[2] / 10,
+                            "blasts": values[3],
+                        },
+                    )
 
     def set_mode(self, mode: str) -> None:
         with self.lock:
@@ -212,7 +214,9 @@ class Recorder:
             if self.recording or self.mode != "record" or label not in CLASSES:
                 return
             self.label = label
-            self.name = "".join(c for c in name.strip().replace(" ", "-") if c.isalnum() or c in "-_")
+            self.name = "".join(
+                c for c in name.strip().replace(" ", "-") if c.isalnum() or c in "-_"
+            )
             self.limit = max(0.0, limit)
             self.chunks, self.samples, self.dropped = [], 0, 0
             self.message = ""
@@ -328,7 +332,12 @@ class MacMic:
         event = None
         if alert >= 0:
             if not self.active:
-                self.active, self.best, self.hops, self.peak = True, [0.0] * len(ALERT_CLASSES), 0, level
+                self.active, self.best, self.hops, self.peak = (
+                    True,
+                    [0.0] * len(ALERT_CLASSES),
+                    0,
+                    level,
+                )
             self.best[alert] = max(self.best[alert], float(scores[0][alert]))
             self.quiet = 0
         elif self.active:
@@ -579,7 +588,9 @@ def main() -> None:
                 return self._send(b"{}", "application/json")
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or "{}")
             if self.path == "/start":
-                recorder.start(body.get("label", ""), body.get("name", ""), float(body.get("limit", 0)))
+                recorder.start(
+                    body.get("label", ""), body.get("name", ""), float(body.get("limit", 0))
+                )
             elif self.path == "/stop":
                 recorder.stop()
             elif self.path == "/discard":

@@ -40,7 +40,7 @@ GAP = (2.5, 5.0)  # seconds between event starts
 
 
 def build_stream(minutes: float, rng: np.random.Generator):
-    """Returns (int16 audio, events), events being (source, first sample, last sample)."""
+    """Return (int16 audio, events), events being (source, first sample, last sample)."""
     n = int(minutes * 60) * SAMPLE_RATE
     clips: dict[str, list[str]] = {s: [] for s in SOURCES}
     for kind, path in mswc_items("test", rng) + nonspeech_items("test"):

@@ -1,5 +1,10 @@
-// See mic.h.
-
+/**
+ * author: Tobias Halpern <62962933+TobiasH453@users.noreply.github.com>
+ * date: 2026-11-14
+ * file: mic.c
+ *
+ * INMP441 I2S microphone capture. see mic.h.
+ */
 #include "mic.h"
 
 #include "hardware/clocks.h"
@@ -8,22 +13,30 @@
 
 #include "i2s_mic.pio.h"
 
-// The DMA write address wraps on a power-of-two byte boundary, so the buffer must be that
-// size and aligned to it.
+/**
+ * RING_BITS - log2 of the ring buffer's size in bytes
+ * RING_BYTES - the ring buffer's size in bytes
+ *
+ * the DMA write address wraps on a power-of-two byte boundary, so the buffer
+ * must be that size and aligned to it.
+ */
 #define RING_BITS 14
 #define RING_BYTES (1u << RING_BITS)
 _Static_assert(RING_BYTES == MIC_BUFFER_SAMPLES * sizeof(uint32_t), "ring size mismatch");
 
 static uint32_t ring[MIC_BUFFER_SAMPLES] __attribute__((aligned(RING_BYTES)));
 static uint dma_chan;
-static uint32_t read_pos; // index of the next sample mic_read() returns
+static uint32_t read_pos; /* index of the next sample mic_read() returns */
 
+/**
+ * mic_init - start the clocks and the capture
+ */
 void mic_init(uint pin_sd, uint pin_sck) {
 	PIO pio;
 	uint sm;
 	uint offset;
 
-	// Picks whichever PIO block has a free state machine and room for the program.
+	/* picks whichever PIO block has a free state machine and room for the program */
 	uint first = pin_sd < pin_sck ? pin_sd : pin_sck;
 	uint last = pin_sd > pin_sck + 1 ? pin_sd : pin_sck + 1;
 	bool ok = pio_claim_free_sm_and_add_program_for_gpio_range(&i2s_mic_program, &pio, &sm, &offset,
@@ -33,22 +46,25 @@ void mic_init(uint pin_sd, uint pin_sck) {
 	pio_sm_config c = i2s_mic_program_get_default_config(offset);
 	sm_config_set_in_pins(&c, pin_sd);
 	sm_config_set_sideset_pins(&c, pin_sck);
-	sm_config_set_in_shift(&c, false, true, 32); // shift left (MSB first), autopush at 32
+	sm_config_set_in_shift(&c, false, true, 32); /* shift left (MSB first), autopush at 32 */
 	sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_RX);
-	// Two instructions per SCK cycle, 64 SCK cycles per sample.
+	/* two instructions per SCK cycle, 64 SCK cycles per sample */
 	sm_config_set_clkdiv(&c, (float)clock_get_hz(clk_sys) / (MIC_SAMPLE_RATE * 64 * 2));
 
 	pio_gpio_init(pio, pin_sck);
 	pio_gpio_init(pio, pin_sck + 1);
 	pio_gpio_init(pio, pin_sd);
-	// The mic releases SD after its 24 bits; the pull-down makes the rest read as 0.
+	/* the mic releases SD after its 24 bits; the pull-down makes the rest read as 0 */
 	gpio_pull_down(pin_sd);
 	pio_sm_set_consecutive_pindirs(pio, sm, pin_sck, 2, true);
 	pio_sm_set_consecutive_pindirs(pio, sm, pin_sd, 1, false);
 	pio_sm_init(pio, sm, offset, &c);
 
-	// DMA: PIO RX FIFO -> ring, forever. The write address wraps inside the ring and the
-	// transfer count never runs out, so no interrupt is needed to keep it going.
+	/*
+	 * DMA: PIO RX FIFO -> ring, forever. the write address wraps inside the
+	 * ring and the transfer count never runs out, so no interrupt is needed to
+	 * keep it going.
+	 */
 	dma_chan = dma_claim_unused_channel(true);
 	dma_channel_config d = dma_channel_get_default_config(dma_chan);
 	channel_config_set_transfer_data_size(&d, DMA_SIZE_32);
@@ -63,14 +79,22 @@ void mic_init(uint pin_sd, uint pin_sck) {
 	pio_sm_set_enabled(pio, sm, true);
 }
 
+/**
+ * mic_read - copy new samples out of the ring buffer, oldest first
+ *
+ * reads the DMA channel's write address to find the newest sample, and
+ * shifts each 32-bit word (sample << 8) down to signed 24-bit.
+ *
+ * return: how many samples were copied to @out, at most @max.
+ */
 size_t mic_read(int32_t *out, size_t max) {
-	// Where DMA will write next = one past the newest sample.
+	/* where DMA will write next = one past the newest sample */
 	uint32_t write_pos =
 		(dma_channel_hw_addr(dma_chan)->write_addr - (uintptr_t)ring) / sizeof(uint32_t);
 	size_t n = 0;
 
 	while (read_pos != write_pos && n < max) {
-		// Arithmetic shift: drops the 8 empty bits and keeps the sign.
+		/* arithmetic shift: drops the 8 empty bits and keeps the sign */
 		out[n++] = (int32_t)ring[read_pos] >> 8;
 		read_pos = (read_pos + 1) % MIC_BUFFER_SAMPLES;
 	}

@@ -1,5 +1,11 @@
-// See classifier.h.
-
+/**
+ * author: Tobias Halpern <62962933+TobiasH453@users.noreply.github.com>
+ * date: 2026-11-14
+ * file: classifier.cc
+ *
+ * the Serra classifier: features, TensorFlow Lite Micro and the event logic
+ * behind the plain C API. see classifier.h.
+ */
 #include "classifier.h"
 
 #include <math.h>
@@ -17,52 +23,99 @@
 
 namespace {
 
-// ---- Tuning ----
+/* ---- tuning ---- */
 
-// TFLM's working memory. The model needs CLASSIFIER_ARENA_USED of it (measured on a
-// Pico 2 W by tools/classifier_bench); the rest is margin for a retrained model.
+/**
+ * kArenaBytes - TFLM's working memory
+ *
+ * the model needs CLASSIFIER_ARENA_USED of it (measured on a Pico 2 W by
+ * tools/classifier_bench); the rest is margin for a retrained model.
+ */
 constexpr size_t kArenaBytes = 48 * 1024;
 
-// Frames between inferences: 12 x 20 ms = 240 ms. model/predict.py and stream_test.py use
-// the same step, so their numbers describe what the board does.
+/**
+ * kHopFrames - frames between inferences: 12 x 20 ms = 240 ms
+ *
+ * model/predict.py and stream_test.py use the same step, so their numbers
+ * describe what the board does.
+ */
 constexpr int kHopFrames = 12;
 
-// Wake trigger: run the model only when the newest 240 ms peaked above this, on the mic's
-// 24-bit scale. -60 dBFS is 6 dB under the quietest sound the model was trained on
-// (model/dataset.py: peaks from -42 dBFS after the +12 dB of FEATURES_PCM24_SHIFT).
-constexpr uint32_t kWakePeak = 8389; // (1 << 23) * 10^(-60 / 20)
+/**
+ * kWakePeak - wake trigger: run the model only when the newest 240 ms peaked above this
+ *
+ * on the mic's 24-bit scale. -60 dBFS is 6 dB under the quietest sound the
+ * model was trained on (model/dataset.py: peaks from -42 dBFS after the
+ * +12 dB of FEATURES_PCM24_SHIFT).
+ */
+constexpr uint32_t kWakePeak = 8389; /* (1 << 23) * 10^(-60 / 20) */
 
-// No inference until this many frames after init (3 s). The feature code needs a couple
-// of seconds to learn the noise floor, and training examples always had that lead-in;
-// scored earlier, plain room noise can look like a scream.
+/**
+ * kWarmupFrames - no inference until this many frames after init (3 s)
+ *
+ * the feature code needs a couple of seconds to learn the noise floor, and
+ * training examples always had that lead-in; scored earlier, plain room
+ * noise can look like a scream.
+ */
 constexpr uint32_t kWarmupFrames = 150;
 
-// After a loud step keep running the model for this many more, so every 1-second window
-// that still contains the sound gets scored.
+/**
+ * kWakeHoldHops - steps to keep running the model after a loud step
+ *
+ * so every 1-second window that still contains the sound gets scored.
+ */
 constexpr int kWakeHoldHops = 4;
 
-// An event ends after this many steps in a row without an alert window.
+/**
+ * kEndHops - an event ends after this many steps in a row without an alert window
+ */
 constexpr int kEndHops = 2;
 
-// A sound that keeps going is reported after this many steps and a new event starts.
-// Whistles get longer so a three-blast call is counted in one piece.
-constexpr int kMaxEventHops = 12;		 // ~3 s
-constexpr int kMaxWhistleEventHops = 32; // ~8 s
+/**
+ * kMaxEventHops - steps before a sound that keeps going is reported
+ * kMaxWhistleEventHops - the same for whistles
+ *
+ * after that many steps the event is reported and a new event starts.
+ * whistles get longer so a three-blast call is counted in one piece.
+ */
+constexpr int kMaxEventHops = 12;		 /* ~3 s */
+constexpr int kMaxWhistleEventHops = 32; /* ~8 s */
 
-// Blast counting, on the loudest filterbank channel of each 20 ms frame. Tuned on
-// synthetic whistles only: a blast starts at kBlastOn, and is over once the channel has
-// stayed under kBlastOff for kBlastGapFrames. Shorter than kBlastMinFrames is a click.
+/**
+ * kBlastOn - feature level (0-255) that starts a blast
+ * kBlastOff - feature level a blast must stay under to be over
+ * kBlastGapFrames - frames under kBlastOff that end a blast
+ * kBlastMinFrames - shortest blast; anything shorter is a click
+ * kBlastHistory - recent blast ends remembered for counting
+ *
+ * blast counting, on the loudest filterbank channel of each 20 ms frame.
+ * tuned on synthetic whistles only: a blast starts at kBlastOn, and is over
+ * once the channel has stayed under kBlastOff for kBlastGapFrames. shorter
+ * than kBlastMinFrames is a click.
+ */
 constexpr uint8_t kBlastOn = 170;
 constexpr uint8_t kBlastOff = 130;
 constexpr int kBlastGapFrames = 4;
 constexpr int kBlastMinFrames = 5;
 constexpr int kBlastHistory = 8;
 
-// Level meter high-pass: two one-pole stages at fs / (2 * pi * 2^4), about 160 Hz. Room
-// rumble below the filterbank's 125 Hz edge is often the loudest thing the mic hears; it
-// must not trip the wake trigger or set peak_level.
+/**
+ * kLevelShift - level meter high-pass pole
+ *
+ * two one-pole stages at fs / (2 * pi * 2^4), about 160 Hz. room rumble
+ * below the filterbank's 125 Hz edge is often the loudest thing the mic
+ * hears; it must not trip the wake trigger or set peak_level.
+ */
 constexpr int kLevelShift = 4;
 
+/**
+ * kFrames - feature frames in one model input
+ * kChannels - filterbank channels per frame
+ * kAlertClasses - classes that raise alerts (whistle, scream, help)
+ * kThresholds - minimum score (0-255) per alert class
+ *
+ * all from model_data.h.
+ */
 constexpr int kFrames = SERRA_MODEL_INPUT_FRAMES;
 constexpr int kChannels = SERRA_MODEL_INPUT_CHANNELS;
 constexpr int kAlertClasses = SERRA_MODEL_ALERT_CLASSES;
@@ -72,41 +125,47 @@ static_assert(kFrames == FEATURES_FRAMES && kChannels == FEATURES_CHANNELS,
 			  "model input does not match the feature code");
 static_assert(SERRA_MODEL_CLASSES == 5, "classifier_stats_t holds 5 scores");
 
-// ---- State ----
+/* ---- state ---- */
 
 alignas(16) uint8_t arena[kArenaBytes];
 tflite::MicroInterpreter *interpreter;
 int8_t *model_input;
 const int8_t *model_output;
 
-// The newest kFrames feature frames; frame_next is the oldest and the next overwritten.
+/* the newest kFrames feature frames; frame_next is the oldest and the next overwritten */
 uint8_t frames[kFrames][kChannels];
 int frame_next;
 uint32_t frames_total;
 int frames_since_hop;
 
-// Level meter.
+/* level meter */
 int32_t hp_in[2], hp_out[2];
-uint32_t hop_peak;					   // loudest sample since the last step
-uint32_t recent_peaks[kWakeHoldHops];  // per step, newest kWakeHoldHops steps
+uint32_t hop_peak;					  /* loudest sample since the last step */
+uint32_t recent_peaks[kWakeHoldHops]; /* per step, newest kWakeHoldHops steps */
 int wake_hold;
 int16_t calib_offset;
 
-// Blast detector.
+/* blast detector */
 bool blast_on, blast_logged;
 int blast_frames, blast_quiet;
-uint32_t blast_ends[kBlastHistory]; // frame index where each recent blast was last heard
+uint32_t blast_ends[kBlastHistory]; /* frame index where each recent blast was last heard */
 int blast_next;
 
-// The event in progress, if any.
+/* the event in progress, if any */
 bool event_active;
-uint8_t event_best[kAlertClasses]; // best score per alert class
+uint8_t event_best[kAlertClasses]; /* best score per alert class */
 uint32_t event_peak;
-uint32_t event_first_frame; // first frame of the first alert window
+uint32_t event_first_frame; /* first frame of the first alert window */
 int event_hops, event_quiet;
 
 classifier_stats_t stats;
 
+/**
+ * level_db_x10 - convert a peak on the 24-bit scale to a calibrated level
+ * @peak: peak sample magnitude, full scale = 8388608 (1 << 23)
+ *
+ * return: dBFS in tenths of a dB plus calib_offset.
+ */
 int16_t level_db_x10(uint32_t peak) {
 	if (peak == 0) {
 		peak = 1;
@@ -115,7 +174,13 @@ int16_t level_db_x10(uint32_t peak) {
 	return (int16_t)lroundf(db * 10.0f) + calib_offset;
 }
 
-// Tracks the loudest sample of the high-passed input.
+/**
+ * level_feed - track the loudest sample of the high-passed input
+ * @in: signed 24-bit samples
+ * @n: samples in @in
+ *
+ * runs the kLevelShift high-pass and raises hop_peak.
+ */
 void level_feed(const int32_t *in, size_t n) {
 	for (size_t i = 0; i < n; i++) {
 		int32_t x = in[i];
@@ -132,6 +197,13 @@ void level_feed(const int32_t *in, size_t n) {
 	}
 }
 
+/**
+ * blast_feed - run the blast detector on one feature frame
+ * @frame: kChannels feature bytes, the newest frame
+ *
+ * records where each blast of kBlastMinFrames or more was last heard in
+ * blast_ends.
+ */
 void blast_feed(const uint8_t *frame) {
 	uint8_t loudest = 0;
 	for (int c = 0; c < kChannels; c++) {
@@ -158,7 +230,7 @@ void blast_feed(const uint8_t *frame) {
 	if (blast_quiet > 0) {
 		return;
 	}
-	// Still sounding. Once it is long enough to count, log it and keep its end up to date.
+	/* still sounding. once it is long enough to count, log it and keep its end up to date */
 	if (blast_frames < kBlastMinFrames) {
 		return;
 	}
@@ -169,10 +241,16 @@ void blast_feed(const uint8_t *frame) {
 	blast_ends[blast_next] = frames_total;
 }
 
+/**
+ * blasts_since - count the recent blasts last heard at or after a frame
+ * @first_frame: frame index to count from
+ *
+ * return: blasts in blast_ends at or after @first_frame.
+ */
 uint8_t blasts_since(uint32_t first_frame) {
 	uint8_t count = 0;
 	for (int i = 0; i < kBlastHistory; i++) {
-		// Frame indices start at 1 here, so 0 marks an unused slot.
+		/* frame indices start at 1 here, so 0 marks an unused slot */
 		if (blast_ends[i] != 0 && blast_ends[i] >= first_frame) {
 			count++;
 		}
@@ -180,6 +258,14 @@ uint8_t blasts_since(uint32_t first_frame) {
 	return count;
 }
 
+/**
+ * run_model - run the model on what is already in model_input
+ * @scores: the model's scores, 0-255, in model_data.h order
+ *
+ * also updates stats (inferences, last_infer_us, scores).
+ *
+ * return: false if the model failed.
+ */
 bool run_model(uint8_t scores[SERRA_MODEL_CLASSES]) {
 	uint32_t t0 = time_us_32();
 	if (interpreter->Invoke() != kTfLiteOk) {
@@ -194,7 +280,15 @@ bool run_model(uint8_t scores[SERRA_MODEL_CLASSES]) {
 	return true;
 }
 
-// The alert class (0-based) this window raises, or -1.
+/**
+ * alert_of - the alert class this window raises
+ * @scores: the window's scores, 0-255, in model_data.h order
+ *
+ * a class raises an alert when it has the top score and meets its threshold
+ * in kThresholds.
+ *
+ * return: the alert class (0-based), or -1.
+ */
 int alert_of(const uint8_t scores[SERRA_MODEL_CLASSES]) {
 	int top = 0;
 	for (int c = 1; c < SERRA_MODEL_CLASSES; c++) {
@@ -205,6 +299,11 @@ int alert_of(const uint8_t scores[SERRA_MODEL_CLASSES]) {
 	return top < kAlertClasses && scores[top] >= kThresholds[top] ? top : -1;
 }
 
+/**
+ * event_leader - the alert class with the best score in the current event
+ *
+ * return: the alert class (0-based).
+ */
 int event_leader() {
 	int best = 0;
 	for (int c = 1; c < kAlertClasses; c++) {
@@ -215,6 +314,10 @@ int event_leader() {
 	return best;
 }
 
+/**
+ * event_finish - report the current event and end it
+ * @out: filled in from the event
+ */
 void event_finish(classifier_result_t *out) {
 	int c = event_leader();
 	out->class_id = (uint8_t)(c + 1);
@@ -224,8 +327,15 @@ void event_finish(classifier_result_t *out) {
 	event_active = false;
 }
 
-} // namespace
+} /* namespace */
 
+/**
+ * classifier_init - load the model and reset all state; call once at boot
+ *
+ * the op resolver and the interpreter live in static storage, not the heap.
+ *
+ * return: false if the model can't be loaded.
+ */
 bool classifier_init(int16_t calib_offset_db_x10) {
 	static tflite::MicroMutableOpResolver<7> resolver;
 	static bool resolver_ready;
@@ -239,8 +349,10 @@ bool classifier_init(int16_t calib_offset_db_x10) {
 	if (model->version() != TFLITE_SCHEMA_VERSION) {
 		return false;
 	}
-	// Every op the model uses (model/train.py). RESHAPE is only there in case a future
-	// converter stops folding the model's reshape away.
+	/*
+	 * every op the model uses (model/train.py). RESHAPE is only there in case
+	 * a future converter stops folding the model's reshape away.
+	 */
 	if (!resolver_ready) {
 		if (resolver.AddConv2D() != kTfLiteOk || resolver.AddDepthwiseConv2D() != kTfLiteOk ||
 			resolver.AddMaxPool2D() != kTfLiteOk || resolver.AddAveragePool2D() != kTfLiteOk ||
@@ -251,7 +363,7 @@ bool classifier_init(int16_t calib_offset_db_x10) {
 		resolver_ready = true;
 	}
 
-	// Built in place so nothing here runs before main() or touches the heap.
+	/* built in place so nothing here runs before main() or touches the heap */
 	alignas(tflite::MicroInterpreter) static uint8_t storage[sizeof(tflite::MicroInterpreter)];
 	tflite::MicroInterpreter *candidate =
 		new (storage) tflite::MicroInterpreter(model, resolver, arena, kArenaBytes);
@@ -291,6 +403,12 @@ bool classifier_init(int16_t calib_offset_db_x10) {
 	return true;
 }
 
+/**
+ * classifier_push - feed mic audio as it arrives
+ *
+ * works in chunks of up to 256 samples: level meter, 24-to-16-bit
+ * conversion, then the feature extractor, one frame at a time.
+ */
 void classifier_push(const int32_t *samples24, size_t n) {
 	int16_t pcm[256];
 
@@ -318,12 +436,19 @@ void classifier_push(const int32_t *samples24, size_t n) {
 	}
 }
 
+/**
+ * classifier_poll - run the model when a step is due and report finished events
+ *
+ * return: true once per detected event, with *@out filled in.
+ */
 bool classifier_poll(classifier_result_t *out) {
 	if (interpreter == nullptr || frames_since_hop < kHopFrames) {
 		return false;
 	}
-	// One step per call. If audio arrived faster than we were polled, the steps in between
-	// are skipped: the newest window is the one worth scoring.
+	/*
+	 * one step per call. if audio arrived faster than we were polled, the
+	 * steps in between are skipped: the newest window is the one worth scoring.
+	 */
 	frames_since_hop = 0;
 	stats.windows++;
 
@@ -342,7 +467,7 @@ bool classifier_poll(classifier_result_t *out) {
 	int alert = -1;
 	uint8_t scores[SERRA_MODEL_CLASSES] = {0};
 	if ((wake_hold > 0 || event_active) && frames_total >= kWarmupFrames) {
-		// Oldest frame first; a feature byte b goes in as b - 128.
+		/* oldest frame first; a feature byte b goes in as b - 128 */
 		int8_t *dst = model_input;
 		for (int f = 0; f < kFrames; f++) {
 			const uint8_t *src = frames[(frame_next + f) % kFrames];
@@ -360,7 +485,7 @@ bool classifier_poll(classifier_result_t *out) {
 			event_active = true;
 			memset(event_best, 0, sizeof(event_best));
 			event_hops = 0;
-			// The window that raised the alert reaches back a second.
+			/* the window that raised the alert reaches back a second */
 			event_first_frame = frames_total - (uint32_t)kFrames + 1;
 			event_peak = 0;
 			for (int i = 0; i < kWakeHoldHops; i++) {
@@ -392,10 +517,16 @@ bool classifier_poll(classifier_result_t *out) {
 	return false;
 }
 
-void classifier_get_stats(classifier_stats_t *out) {
-	*out = stats;
-}
+/**
+ * classifier_get_stats - copy out the current classifier_stats_t
+ */
+void classifier_get_stats(classifier_stats_t *out) { *out = stats; }
 
+/**
+ * classifier_infer_features - run the model on a given feature window
+ *
+ * return: false if the model failed or classifier_init() hasn't succeeded.
+ */
 bool classifier_infer_features(const uint8_t *features, uint8_t scores[5]) {
 	if (interpreter == nullptr) {
 		return false;

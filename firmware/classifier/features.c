@@ -1,11 +1,21 @@
-// See features.h.
-
+/**
+ * author: Tobias Halpern <62962933+TobiasH453@users.noreply.github.com>
+ * date: 2026-11-14
+ * file: features.c
+ *
+ * audio features for the classifier: TFLM's audio microfrontend with the
+ * micro_speech settings. see features.h.
+ */
 #include "features.h"
 
 #include "tensorflow/lite/experimental/microfrontend/lib/frontend.h"
 #include "tensorflow/lite/experimental/microfrontend/lib/frontend_util.h"
 
-// DC blocker corner: fs / (2 * pi * 2^DC_SHIFT), about 20 Hz at 16 kHz.
+/**
+ * DC_SHIFT - DC blocker pole; corner at fs / (2 * pi * 2^DC_SHIFT)
+ *
+ * about 20 Hz at 16 kHz.
+ */
 #define DC_SHIFT 7
 
 static struct FrontendState frontend;
@@ -13,11 +23,20 @@ static bool frontend_ready;
 static int32_t dc_prev_in;
 static int32_t dc_prev_out;
 
+/**
+ * features_init - allocate the feature tables (heap, a few KB)
+ *
+ * safe to call again: frees the previous tables first.
+ *
+ * return: false = out of memory.
+ */
 bool features_init(void) {
 	struct FrontendConfig config;
 
-	// The micro_speech settings. The filterbank spans 125 Hz to 7.5 kHz, which covers
-	// speech and the 2-4 kHz band where whistles sit.
+	/*
+	 * the micro_speech settings. the filterbank spans 125 Hz to 7.5 kHz, which
+	 * covers speech and the 2-4 kHz band where whistles sit.
+	 */
 	config.window.size_ms = FEATURES_WINDOW_MS;
 	config.window.step_size_ms = FEATURES_STEP_MS;
 	config.filterbank.num_channels = FEATURES_CHANNELS;
@@ -43,6 +62,9 @@ bool features_init(void) {
 	return frontend_ready;
 }
 
+/**
+ * features_reset - forget all audio history
+ */
 void features_reset(void) {
 	if (frontend_ready) {
 		FrontendReset(&frontend);
@@ -51,11 +73,17 @@ void features_reset(void) {
 	dc_prev_out = 0;
 }
 
+/**
+ * features_pcm24_to_16 - convert signed 24-bit mic samples to 16-bit
+ *
+ * return: the largest absolute sample seen, on the 24-bit scale and before
+ * saturation.
+ */
 uint32_t features_pcm24_to_16(const int32_t *in, int16_t *out, size_t n) {
 	uint32_t peak = 0;
 
 	for (size_t i = 0; i < n; i++) {
-		// One-pole high-pass: y[n] = x[n] - x[n-1] + (1 - 2^-DC_SHIFT) * y[n-1].
+		/* one-pole high-pass: y[n] = x[n] - x[n-1] + (1 - 2^-DC_SHIFT) * y[n-1] */
 		int32_t x = in[i];
 		int32_t y = x - dc_prev_in + dc_prev_out - (dc_prev_out >> DC_SHIFT);
 		dc_prev_in = x;
@@ -77,6 +105,13 @@ uint32_t features_pcm24_to_16(const int32_t *in, int16_t *out, size_t n) {
 	return peak;
 }
 
+/**
+ * features_process - feed samples to the feature extractor
+ *
+ * if features_init() failed, consumes all @n samples and returns false.
+ *
+ * return: true when a frame was written to @frame.
+ */
 bool features_process(const int16_t *samples, size_t n, size_t *consumed, uint8_t *frame) {
 	*consumed = 0;
 	if (!frontend_ready) {
@@ -92,8 +127,10 @@ bool features_process(const int16_t *samples, size_t n, size_t *consumed, uint8_
 		if (out.values == NULL) {
 			continue;
 		}
-		// Same scaling as micro_speech: the frontend's range of roughly 0-670 maps onto
-		// 0-255, with anything above clamped.
+		/*
+		 * same scaling as micro_speech: the frontend's range of roughly 0-670
+		 * maps onto 0-255, with anything above clamped.
+		 */
 		for (size_t c = 0; c < out.size && c < FEATURES_CHANNELS; c++) {
 			uint32_t v = ((uint32_t)out.values[c] * 256u + 333u) / 666u;
 			frame[c] = v > 255u ? 255u : (uint8_t)v;

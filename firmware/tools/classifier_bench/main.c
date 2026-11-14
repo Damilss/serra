@@ -1,18 +1,26 @@
-// classifier_bench: runs the classifier on the board and reports over USB serial. The other
-// end is model/board_test.py.
-//
-// Each time a program opens the port it prints a report, one "key value..." line each:
-//     init ok|failed
-//     arena <bytes used> <bytes reserved>
-//     heap <bytes the feature tables took>
-//     pattern <n> <5 scores, 0-255>     model output for fixed test input n (see fill_pattern)
-//     infer_us <min> <mean> <max>       over INFER_RUNS model runs
-//     features_us <per 20 ms frame>     feature extraction, averaged over 1 s of noise
-//     live
-// and then, from the mic, one line per 240 ms step and one per detection:
-//     w <level, tenths of dB> <ran model 0|1> <infer us> <5 scores>
-//     alert <class_id> <confidence> <peak_level> <blast_count>
-
+/**
+ * author: Tobias Halpern <62962933+TobiasH453@users.noreply.github.com>
+ * date: 2026-11-14
+ * file: main.c
+ *
+ * classifier_bench: runs the classifier on the board and reports over USB serial. the other
+ * end is model/board_test.py. a standalone build with no radio code; everything runs in the
+ * one main() loop on core 0.
+ *
+ * each time a program opens the port it prints a report, one "key value..." line each:
+ *     init ok|failed
+ *     arena <bytes used> <bytes reserved>
+ *     heap <bytes the feature tables took>
+ *     pattern <n> <5 scores, 0-255>     model output for fixed test input n (see fill_pattern)
+ *     infer_us <min> <mean> <max>       over INFER_RUNS model runs
+ *     features_us <per 20 ms frame>     feature extraction, averaged over 1 s of noise
+ *     live
+ * and then, from the mic, one line per 240 ms step and one per detection:
+ *     w <level, tenths of dB> <ran model 0|1> <infer us> <5 scores>
+ *     alert <class_id> <confidence> <peak_level> <blast_count>
+ *
+ * model/board_test.py and model/dev_ui.py parse these lines, so their format is fixed.
+ */
 #include <malloc.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -23,24 +31,55 @@
 #include "classifier.h"
 #include "mic.h"
 
-// docs/classifier-interface.md: SD -> GP2, SCK -> GP3, WS -> GP4.
+/**
+ * PIN_SD - GPIO for the INMP441's SD (data) line
+ * PIN_SCK - GPIO for the INMP441's SCK (bit clock) line
+ *
+ * docs/classifier-interface.md: SD -> GP2, SCK -> GP3, WS -> GP4. WS isn't set here:
+ * mic_init() puts it on PIN_SCK + 1.
+ */
 #define PIN_SD 2
 #define PIN_SCK 3
 
+/**
+ * PATTERNS - how many fixed test inputs the report runs (see fill_pattern)
+ */
 #define PATTERNS 4
+
+/**
+ * INFER_RUNS - model runs timed for the "infer_us" line
+ */
 #define INFER_RUNS 20
+
+/**
+ * FEATURE_BYTES - one model input: 49 frames of 40 channels, one byte each
+ */
 #define FEATURE_BYTES (49 * 40)
 
+/* state of lcg(); reseeded so every pattern and the noise are reproducible */
 static uint32_t lcg_state;
 
+/**
+ * lcg - advance the linear congruential generator behind the test inputs
+ *
+ * model/board_test.py runs the same generator to build the same patterns.
+ *
+ * return: the new state; callers use its high bits.
+ */
 static uint32_t lcg(void) {
 	lcg_state = lcg_state * 1664525u + 1013904223u;
 	return lcg_state;
 }
 
-// Fixed test inputs. model/board_test.py builds the same ones; keep the two in step.
-//   0: silence   1: random bytes   2: random, quiet (0-63)
-//   3: quiet (0-31) with a loud band across channels 20-22, like a steady tone
+/**
+ * fill_pattern - build fixed test input @n
+ * @n: which pattern, 0 to PATTERNS - 1
+ * @features: FEATURE_BYTES bytes to fill
+ *
+ * model/board_test.py builds the same ones; keep the two in step.
+ *   0: silence   1: random bytes   2: random, quiet (0-63)
+ *   3: quiet (0-31) with a loud band across channels 20-22, like a steady tone
+ */
 static void fill_pattern(int n, uint8_t *features) {
 	lcg_state = 1u + (uint32_t)n;
 	for (int i = 0; i < FEATURE_BYTES; i++) {
@@ -63,6 +102,15 @@ static void fill_pattern(int n, uint8_t *features) {
 	}
 }
 
+/**
+ * report - print the startup report, from "init" through "live"
+ * @ok: whether classifier_init() succeeded; if not, only "init failed" is printed
+ * @heap_used: heap bytes classifier_init() took, for the "heap" line
+ *
+ * runs the fixed patterns, times INFER_RUNS inferences on pattern 1, then times feature
+ * extraction on 1 s of noise. this feeds the classifier test audio, so the caller
+ * re-initializes it afterwards.
+ */
 static void report(bool ok, size_t heap_used) {
 	static uint8_t features[FEATURE_BYTES];
 	static int32_t noise[256];
@@ -97,7 +145,7 @@ static void report(bool ok, size_t heap_used) {
 	printf("infer_us %lu %lu %lu\n", (unsigned long)lo, (unsigned long)(sum / INFER_RUNS),
 		   (unsigned long)hi);
 
-	// One second of noise at about -40 dBFS: 50 frames.
+	/* one second of noise at about -40 dBFS: 50 frames */
 	lcg_state = 99;
 	uint32_t t0 = time_us_32();
 	for (int block = 0; block < 16000 / 256; block++) {
@@ -110,6 +158,15 @@ static void report(bool ok, size_t heap_used) {
 	printf("live\n");
 }
 
+/**
+ * main - bring up USB stdio, the classifier and the mic, then run the bench loop
+ *
+ * the mic is read and the classifier fed whether or not anything is connected. when a
+ * program opens the port, report() runs once; after that, while connected, each new
+ * window prints a "w" line and each detection an "alert" line.
+ *
+ * return: never; the loop runs forever.
+ */
 int main(void) {
 	static int32_t samples[256];
 	classifier_result_t result;
@@ -128,10 +185,11 @@ int main(void) {
 		if (stdio_usb_connected() != connected) {
 			connected = !connected;
 			if (connected) {
-				sleep_ms(200); // let the PC finish opening the port
+				sleep_ms(200); /* let the PC finish opening the port */
 				report(ok, heap_used);
-				// The report fed the classifier test audio: start the live part clean.
+				/* the report fed the classifier test audio: start the live part clean */
 				ok = classifier_init(0);
+				/* drop the mic audio that queued up during the report */
 				while (mic_read(samples, 256) > 0) {
 				}
 				classifier_get_stats(&stats);

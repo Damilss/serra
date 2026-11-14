@@ -106,7 +106,7 @@ def main() -> None:
         )
         if not args.keep:
             tar_path.unlink()
-            # leave the .done marker's sibling gone too, so a re-run re-downloads cleanly
+            # Remove the .done marker as well, so a re-run re-downloads cleanly.
             tar_path.with_suffix(tar_path.suffix + ".done").unlink(missing_ok=True)
 
 

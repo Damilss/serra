@@ -12,17 +12,17 @@
 set(SERRA_CLASSIFIER_DIR ${CMAKE_CURRENT_LIST_DIR})
 
 if (NOT PICO_TFLMICRO_PATH)
-	if (DEFINED ENV{PICO_TFLMICRO_PATH})
-		set(PICO_TFLMICRO_PATH $ENV{PICO_TFLMICRO_PATH})
-	else()
-		get_filename_component(PICO_TFLMICRO_PATH "${PICO_SDK_PATH}/../pico-tflmicro" ABSOLUTE)
-	endif()
+    if (DEFINED ENV{PICO_TFLMICRO_PATH})
+        set(PICO_TFLMICRO_PATH $ENV{PICO_TFLMICRO_PATH})
+    else()
+        get_filename_component(PICO_TFLMICRO_PATH "${PICO_SDK_PATH}/../pico-tflmicro" ABSOLUTE)
+    endif()
 endif()
 set(PICO_TFLMICRO_PATH "${PICO_TFLMICRO_PATH}" CACHE PATH "pico-tflmicro checkout")
 if (NOT EXISTS ${PICO_TFLMICRO_PATH}/src/tensorflow/lite/micro/micro_interpreter.h)
-	message(FATAL_ERROR
-		"pico-tflmicro not found at ${PICO_TFLMICRO_PATH}. Clone "
-		"https://github.com/raspberrypi/pico-tflmicro and set PICO_TFLMICRO_PATH.")
+    message(FATAL_ERROR
+        "pico-tflmicro not found at ${PICO_TFLMICRO_PATH}. Clone "
+        "https://github.com/raspberrypi/pico-tflmicro and set PICO_TFLMICRO_PATH.")
 endif()
 
 # ---- TensorFlow Lite Micro with the CMSIS-NN kernels ----
@@ -31,35 +31,35 @@ endif()
 # ops and its copy of KISS FFT, which we don't use and vendor ourselves below.
 set(TFLM_SRC ${PICO_TFLMICRO_PATH}/src)
 file(GLOB_RECURSE TFLM_SOURCES
-	${TFLM_SRC}/tensorflow/*.c
-	${TFLM_SRC}/tensorflow/*.cc
-	${TFLM_SRC}/tensorflow/*.cpp
-	${TFLM_SRC}/third_party/cmsis_nn/Source/*.c
+    ${TFLM_SRC}/tensorflow/*.c
+    ${TFLM_SRC}/tensorflow/*.cc
+    ${TFLM_SRC}/tensorflow/*.cpp
+    ${TFLM_SRC}/third_party/cmsis_nn/Source/*.c
 )
 list(FILTER TFLM_SOURCES EXCLUDE REGEX "_test\\.cpp$")
 
 add_library(serra_tflm STATIC ${TFLM_SOURCES})
 target_include_directories(serra_tflm PUBLIC
-	${TFLM_SRC}
-	${TFLM_SRC}/third_party/ruy
-	${TFLM_SRC}/third_party/gemmlowp
-	${TFLM_SRC}/third_party/flatbuffers/include
-	${TFLM_SRC}/third_party/cmsis/CMSIS/Core/Include
-	${TFLM_SRC}/third_party/cmsis_nn/Include
+    ${TFLM_SRC}
+    ${TFLM_SRC}/third_party/ruy
+    ${TFLM_SRC}/third_party/gemmlowp
+    ${TFLM_SRC}/third_party/flatbuffers/include
+    ${TFLM_SRC}/third_party/cmsis/CMSIS/Core/Include
+    ${TFLM_SRC}/third_party/cmsis_nn/Include
 )
 target_compile_definitions(serra_tflm PUBLIC
-	TF_LITE_STATIC_MEMORY=1
-	TF_LITE_DISABLE_X86_NEON=1
-	CMSIS_NN=1
-	ARDUINO=1  # pico-tflmicro's own build sets this: it selects the microcontroller code paths
+    TF_LITE_STATIC_MEMORY=1
+    TF_LITE_DISABLE_X86_NEON=1
+    CMSIS_NN=1
+    ARDUINO=1  # pico-tflmicro's own build sets this: it selects the microcontroller code paths
 )
 target_compile_options(serra_tflm PRIVATE -w)
 target_compile_options(serra_tflm PUBLIC
-	# With ARDUINO set, flatbuffers skips <cstdint> and newer GCCs no longer pull it in.
-	"$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>"
-	$<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-	$<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
-	$<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
+    # with ARDUINO set, flatbuffers skips <cstdint> and newer GCCs no longer pull it in
+    "$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include cstdint>"
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
 )
 target_link_libraries(serra_tflm PUBLIC pico_stdlib)
 
@@ -74,18 +74,18 @@ set(KISSFFT_SOURCES ${KISSFFT_DIR}/kiss_fft.c ${KISSFFT_DIR}/tools/kiss_fftr.c)
 set_source_files_properties(${KISSFFT_SOURCES} PROPERTIES LANGUAGE CXX)
 
 add_library(serra_classifier STATIC
-	${SERRA_CLASSIFIER_DIR}/classifier.cc
-	${SERRA_CLASSIFIER_DIR}/features.c
-	${SERRA_CLASSIFIER_DIR}/model_data.cc
-	${MICROFRONTEND_SOURCES}
-	${KISSFFT_SOURCES}
+    ${SERRA_CLASSIFIER_DIR}/classifier.cc
+    ${SERRA_CLASSIFIER_DIR}/features.c
+    ${SERRA_CLASSIFIER_DIR}/model_data.cc
+    ${MICROFRONTEND_SOURCES}
+    ${KISSFFT_SOURCES}
 )
 target_include_directories(serra_classifier PUBLIC ${SERRA_CLASSIFIER_DIR})
 # The vendored microfrontend comes first so its headers win over any copy in pico-tflmicro.
 target_include_directories(serra_classifier BEFORE PRIVATE
-	${MICROFRONTEND_DIR}
-	${KISSFFT_DIR}
-	${KISSFFT_DIR}/tools
+    ${MICROFRONTEND_DIR}
+    ${KISSFFT_DIR}
+    ${KISSFFT_DIR}/tools
 )
 target_compile_definitions(serra_classifier PRIVATE FIXED_POINT=16)
 target_link_libraries(serra_classifier PRIVATE serra_tflm pico_stdlib)

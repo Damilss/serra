@@ -80,7 +80,10 @@ def main() -> None:
     for n in range(PATTERNS):
         match = board_scores.get(n) == pc[n].tolist()
         same &= match
-        print(f"Pattern {n}: board {board_scores.get(n)}  PC {pc[n].tolist()}  {'same' if match else 'DIFFERENT'}")
+        print(
+            f"Pattern {n}: board {board_scores.get(n)}  PC {pc[n].tolist()}  "
+            f"{'same' if match else 'DIFFERENT'}"
+        )
     print("Board and PC agree." if same else "Board and PC DISAGREE: is the board's model current?")
 
     if args.listen:
@@ -88,19 +91,26 @@ def main() -> None:
         end = time.monotonic() + args.listen
         steps = ran = 0
         while time.monotonic() < end:
-            key, *rest = (port.readline().decode(errors="replace").split() or [""])
+            key, *rest = port.readline().decode(errors="replace").split() or [""]
             if key == "w":
                 steps += 1
                 ran += int(rest[1])
                 scores = [int(v) for v in rest[3:8]]
                 top = int(np.argmax(scores))
                 if not args.quiet:
-                    what = f"{CLASSES[top]:12s} {scores[top] / 256:.2f}  {int(rest[2]) / 1000:.1f} ms" if rest[1] == "1" else "(quiet, skipped)"
+                    what = (
+                        f"{CLASSES[top]:12s} {scores[top] / 256:.2f}  {int(rest[2]) / 1000:.1f} ms"
+                        if rest[1] == "1"
+                        else "(quiet, skipped)"
+                    )
                     print(f"{int(rest[0]) / 10:7.1f}  {what}")
             elif key == "alert":
                 c, conf, peak, blasts = (int(v) for v in rest)
                 extra = f", {blasts} blast{'s' * (blasts != 1)}" if c == 1 else ""
-                print(f"*** ALERT {CLASSES[c - 1]}: confidence {conf / 255:.2f}, peak {peak / 10:.1f} dB{extra}")
+                print(
+                    f"*** ALERT {CLASSES[c - 1]}: confidence {conf / 255:.2f}, "
+                    f"peak {peak / 10:.1f} dB{extra}"
+                )
         print(f"{steps} steps, model ran on {ran} ({ran / max(1, steps):.0%}).")
 
 

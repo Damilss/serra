@@ -44,7 +44,7 @@ def find_port() -> str:
 
 
 def packets(port: serial.Serial):
-    """Yields (first sample index, int32 samples) for each packet, resyncing on the magic."""
+    """Yield (first sample index, int32 samples) for each packet, resyncing on the magic."""
     buf = bytearray()
     while True:
         chunk = port.read(4096)
