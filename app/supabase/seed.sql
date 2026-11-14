@@ -1,8 +1,8 @@
--- Demo data matching the dashboard mockup (app/mockup/). All values are made up.
+-- Demo data matching the dashboard's mock feed (app/src/lib). All values are made up.
 -- Runs automatically after migrations on `supabase db reset`.
 --
 -- Loudness is in the wire format's units: peak_level is tenths of a dB (898 = 89.8 dB), and
--- peak_db is computed from it. The levels are what the mockup's sound model gives for a
+-- peak_db is computed from it. The levels are what the dashboard's sound model (src/lib/sound.ts) gives for a
 -- whistle at Ridge Camp: ~90 dB at the calling node, fading with distance (inverse square plus
 -- absorption) to the nodes that confirm it, down to the 50 dB wake trigger.
 

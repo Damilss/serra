@@ -1,12 +1,11 @@
-// ESLint (flat config) for app/: the Next.js app (TypeScript + React), the Playwright tests, the Node
-// scripts and the design mockup's inline <script>. Formatting is Prettier's job;
+// ESLint (flat config) for app/: the Next.js app (TypeScript + React), the Playwright tests and the
+// Node scripts. Formatting is Prettier's job;
 // eslint-config-prettier turns off the style rules that would fight it.
 
 import js from '@eslint/js';
 import nextVitals from 'eslint-config-next/core-web-vitals';
 import nextTs from 'eslint-config-next/typescript';
 import prettier from 'eslint-config-prettier';
-import html from 'eslint-plugin-html';
 import globals from 'globals';
 
 // Next's configs are scoped to the app's own source, so its React rules don't apply to tests and scripts.
@@ -39,13 +38,6 @@ const config = [
     },
   },
 
-  // The design mockup: browser code inside HTML (a classic script, not a module).
-  {
-    files: ['**/*.html'],
-    plugins: { html },
-    languageOptions: { ecmaVersion: 'latest', sourceType: 'script', globals: globals.browser },
-  },
-
   // Node: config files, scripts and tests.
   {
     files: ['**/*.{js,mjs}'],
@@ -66,7 +58,7 @@ const config = [
     },
   },
   {
-    files: ['**/*.{js,mjs,html}'],
+    files: ['**/*.{js,mjs}'],
     rules: { 'no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }] },
   },
 

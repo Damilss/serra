@@ -15,7 +15,7 @@ import { WelcomeCanvas } from './WelcomeCanvas';
 export function Welcome() {
   const router = useRouter();
 
-  // Old mockup links (index.html#dashboard) still land on the dashboard.
+  // Links to "/#dashboard" (the old single-page mockup's URL) still land on the dashboard.
   useEffect(() => {
     if (window.location.hash === '#dashboard') router.replace('/dashboard');
   }, [router]);

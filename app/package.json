@@ -2,14 +2,13 @@
   "name": "serra-app",
   "version": "0.1.0",
   "private": true,
-  "description": "Serra base station dashboard: mockup, local Supabase, and repo-wide checks",
+  "description": "Serra base station dashboard (Next.js), local Supabase, and repo-wide checks",
   "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "mockup": "node scripts/serve.mjs",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
@@ -21,7 +20,7 @@
     "prepare": "node scripts/install-hooks.mjs"
   },
   "lint-staged": {
-    "*.{js,mjs,cjs,ts,tsx,html}": [
+    "*.{js,mjs,cjs,ts,tsx}": [
       "eslint --fix",
       "prettier --write"
     ],
@@ -37,7 +36,6 @@
     "eslint": "10.15.0",
     "eslint-config-next": "16.4.6",
     "eslint-config-prettier": "10.1.8",
-    "eslint-plugin-html": "8.2.1",
     "globals": "17.14.0",
     "husky": "9.1.7",
     "lint-staged": "17.6.0",

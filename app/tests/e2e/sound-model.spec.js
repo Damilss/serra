@@ -1,4 +1,4 @@
-// The mockup's sound model must stay consistent with the wire format and with physics:
+// The dashboard's sound model (src/lib/sound.ts) must stay consistent with the wire format and with physics:
 // peak_level in tenths of a dB (i16), every reported level above the wake trigger, the calling
 // node loudest, and levels falling with distance.
 

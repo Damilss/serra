@@ -1,5 +1,5 @@
 /*
- * Serra dashboard styles, carried over from the design mockup (app/mockup/index.html).
+ * Serra dashboard styles, carried over from the original HTML design mockup.
  * Class names match the components in src/components. Brand tokens are the CSS variables on :root;
  * the same colors are exposed to Tailwind in globals.css (bg-night, text-flare, ...).
  */

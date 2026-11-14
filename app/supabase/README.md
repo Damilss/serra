@@ -12,7 +12,7 @@ Serranodes ─BLE─▶ BLE listener (Python, service_role key) ─▶ Supabase 
 | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `config.toml`                                | Local Supabase settings. Project id `serra`. Email testing, file storage, edge functions and log analytics are off: Serra doesn't use them, and fewer containers means a lighter, more reliable demo. |
 | `migrations/20261113000000_serra_schema.sql` | Tables, access rules and Realtime.                                                                                                                                                                    |
-| `seed.sql`                                   | Demo data matching the dashboard mockup: the base, five Serranodes, and one resolved alert.                                                                                                           |
+| `seed.sql`                                   | Demo data matching the dashboard's mock feed: the base, five Serranodes, and one resolved alert.                                                                                                      |
 
 ## Tables
 

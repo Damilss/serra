@@ -1,5 +1,5 @@
-// SVG path data from the Serra brand kit (serra_brand/logos/svg), as inlined in the mockup.
-// Generated once from app/mockup/index.html; edit the brand kit, not these strings.
+// SVG path data from the Serra brand kit (serra_brand/logos/svg, on-dark versions).
+// Copied from the brand kit; if the logos change there, update these strings to match.
 
 /** The three arcs of the "))" call mark, in the mark's 64-unit box. */
 export const ARCS = "M30.29 11.93A30 30 0 0 1 30.29 52.07M48.29 11.93A30 30 0 0 1 48.29 52.07M66.29 11.93A30 30 0 0 1 66.29 52.07";

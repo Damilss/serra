@@ -1,4 +1,4 @@
-// Map renderer (canvas). Ported from the mockup's drawMap / drawAlert.
+// Map renderer (canvas).
 //
 // Layers: a static terrain layer drawn once per resize into an offscreen canvas, then every frame:
 // mesh links, the route from the selected node to the base, heartbeat dots, the live or replayed
