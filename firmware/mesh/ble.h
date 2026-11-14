@@ -22,7 +22,7 @@
  * @len: bytes in @pkt, at least sizeof(mesh_pkt_t)
  * @rssi: received signal strength in dBm
  *
- * runs on core 0 from the scheduler loop's cyw43_arch_poll(). fires on
+ * runs on core 0 from the main loop's cyw43_arch_poll(). fires on
  * every advertisement, so the same packet arrives many times; dedup is the
  * mesh layer's job.
  */
@@ -32,9 +32,9 @@ typedef void (*ble_rx_cb_t)(const uint8_t *pkt, uint8_t len, int8_t rssi);
  * ble_init - start BTstack, then scan for Serranet packets
  * @on_rx: called for each Serranet packet heard
  *
- * call after cyw43_arch_init() and sched_set_idle(), since BTstack only
- * runs when the scheduler loop polls the radio. scanning starts once the
- * stack is up (HCI_STATE_WORKING), a moment after sched_run() starts.
+ * call after cyw43_arch_init(). BTstack only runs when the main loop polls
+ * the cyw43 async_context, so scanning starts once the stack is up
+ * (HCI_STATE_WORKING), a moment after the main loop starts.
  *
  * return: 0 on success, -1 if @on_rx is NULL or BTstack failed to power on.
  */

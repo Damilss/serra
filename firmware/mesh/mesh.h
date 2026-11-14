@@ -19,7 +19,7 @@
 /**
  * mesh_init - pick this node's ID and msg_id seed, then start BLE
  *
- * call after cyw43_arch_init() and sched_set_idle().
+ * call after cyw43_arch_init().
  *
  * return: 0 on success, -1 if BLE failed to start.
  */

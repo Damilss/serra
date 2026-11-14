@@ -29,7 +29,6 @@ pico_sdk_init()
 
 add_executable(node
     main.c
-    runtime/scheduler.c
     blink_light/blink_light.c
     mesh/ble.c
     mesh/mesh.c

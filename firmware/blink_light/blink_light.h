@@ -11,14 +11,15 @@
 #include <stdint.h>
 
 /**
- * blink_light_init - start blinking the onboard LED as a scheduler task
+ * blink_light_init - start blinking the onboard LED
  * @period_ms: time between LED toggles; one full on/off blink takes 2 * @period_ms
  *
  * the Pico 2 W's LED is wired to the CYW43 radio chip, not an RP2350 GPIO,
- * so call this after cyw43_arch_init(). a blinking LED then shows that the
- * scheduler is running and the radio chip started.
+ * so call this after cyw43_arch_init(). the toggles run as an at-time
+ * worker on the cyw43 async_context, so a blinking LED shows that the main
+ * loop is polling the context and the radio chip started.
  *
- * return: 0 on success, -1 if the scheduler rejected the task.
+ * return: 0 on success, -1 if the async_context rejected the worker.
  */
 int blink_light_init(uint32_t period_ms);
 
