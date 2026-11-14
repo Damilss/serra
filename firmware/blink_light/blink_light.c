@@ -3,6 +3,8 @@
  *		   Elias Santillan <emsantil@calpoly.edu>
  * date: 2026-11-13
  * file: blink_light.c
+ *
+ * this will run on core 0, The LED is on the CYW43 wifi chip
  */
 #include "blink_light.h"
 

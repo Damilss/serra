@@ -4,6 +4,8 @@
  * date: 2026-11-13
  * file: packet.h
  *
+ * includes the meshing packet, and payload packets
+ *
  * Serranet wire format: the exact bytes every node and the base station
  * agree on. this is a team contract (CONTRIBUTING.md, "The packet format is
  * a contract"): a change here also needs the base-station decoder and the
