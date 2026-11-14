@@ -22,12 +22,16 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 
 | Piece | State |
 |---|---|
-| Toolchain + Pico SDK 2.3.1 install (`scripts/install-firmware-tooling.sh`) | Done (macOS) |
+| Toolchain + Pico SDK 2.3.1 install (`scripts/install-firmware-tooling.sh`) | Done (macOS); builds on Linux (WSL2) too |
 | SDK images on hardware (build info, timers, USB stdio) | Done |
 | SDK smoke test: `picow_blink` (onboard LED through the CYW43) | Builds; **not yet run on a Pico 2 W** |
 | SDK smoke test: `ble_temp_server` (BLE advertising) | Builds; **not yet run on a Pico 2 W** |
-| BLE advertise test with our packet format | Not started |
-| `runtime/`, `audio/`, `classifier/`, `mesh/` | Empty placeholders |
+| INMP441 mic hardware | Headers soldered, ready to wire (pins proposed in [`docs/classifier-interface.md`](../docs/classifier-interface.md#1-microphone-inmp441)); **not yet read by firmware** |
+| BLE advertise test with our packet format | **Works on 2 × Pico 2 W (2026-11-14)**: each board advertises a test alert every second and the other decodes it over the air (`[mesh] rx src=...` on serial) |
+| Our firmware (`node.uf2`): `main.c` + `blink_light` + `mesh/` | **Runs on a Pico 2 W**: LED toggles every 1000 ms. All core 0 work runs as `async_context` workers on the cyw43 context; `main.c` loops on `cyw43_arch_poll()` + `cyw43_arch_wait_for_work_until()`. Ported off our own scheduler 2026-11-14 and re-tested on hardware: LED, BLE and mesh tx/rx all work |
+| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Used by `mesh/ble.c`: non-connectable advertising + passive scan, filtered on company ID `0xFFFF` and `MESH_MAGIC` |
+| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, logs received packets. **No dedup or relaying yet**; `main.c` runs a temporary 1 s test beacon |
+| `runtime/ipc`, `runtime/node_state`, `audio/`, `classifier/` | Empty placeholders |
 
 ---
 
@@ -38,7 +42,7 @@ firmware/
 ├── CMakeLists.txt     # SDK build for PICO_BOARD=pico2_w
 ├── btstack_config.h   # (planned) BTstack options; the pico_btstack_* libraries require it
 ├── main.c             # application entry
-├── runtime/           # scheduler / power management (planned)
+├── runtime/           # inter-core handoff (ipc), node state; power management planned
 ├── audio/             # mic capture, wake trigger (planned)
 ├── classifier/        # int8 model + inference (planned)
 ├── mesh/              # BLE flooding (planned)
