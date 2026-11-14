@@ -22,3 +22,6 @@ model/data/*
 !model/data/.gitkeep
 !model/data/README.md
 model/out/
+
+# vscode: per-machine settings (extensions.json stays shared)
+.vscode/settings.json
