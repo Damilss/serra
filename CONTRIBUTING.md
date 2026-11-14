@@ -20,7 +20,7 @@ Thanks for helping. Serra is an off-grid search and rescue mesh: Pico 2 W nodes 
 
 ## Project status
 
-**Early firmware.** The node firmware builds on the Pico SDK 2.3.1. `scripts/install-firmware-tooling.sh` installs the toolchain and the SDK, and the SDK's Wi-Fi blink and BLE examples build for the Pico 2 W. Our own `firmware/` CMake build isn't written yet, and `runtime/`, `audio/`, `classifier/` and `mesh/` are empty placeholders. The model and base station have no code yet. See [`firmware/README.md`](firmware/README.md#status) for the detailed status.
+**Early firmware.** The node firmware builds on the Pico SDK 2.3.1. `scripts/install-firmware-tooling.sh` installs the toolchain and the SDK, and the SDK's Wi-Fi blink and BLE examples build for the Pico 2 W. `firmware/CMakeLists.txt` is in place, but our own build isn't finished: `main.c` is empty and `btstack_config.h` doesn't exist yet. `runtime/`, `audio/`, `classifier/` and `mesh/` are empty placeholders. The model and base station have no code yet. See [`firmware/README.md`](firmware/README.md#status) for the detailed status.
 
 - **Looking for something to do?** [Known limitations and open questions](README.md#known-limitations-and-open-questions) and [Future work](README.md#future-work) list what's still open.
 
