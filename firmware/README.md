@@ -22,12 +22,14 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 
 | Piece | State |
 |---|---|
-| Toolchain + Pico SDK 2.3.1 install (`scripts/install-firmware-tooling.sh`) | Done (macOS) |
+| Toolchain + Pico SDK 2.3.1 install (`scripts/install-firmware-tooling.sh`) | Done (macOS); builds on Linux (WSL2) too |
 | SDK images on hardware (build info, timers, USB stdio) | Done |
 | SDK smoke test: `picow_blink` (onboard LED through the CYW43) | Builds; **not yet run on a Pico 2 W** |
 | SDK smoke test: `ble_temp_server` (BLE advertising) | Builds; **not yet run on a Pico 2 W** |
 | BLE advertise test with our packet format | Not started |
-| `runtime/`, `audio/`, `classifier/`, `mesh/` | Empty placeholders |
+| Our firmware (`node.uf2`): `main.c` + `runtime/scheduler` + `blink_light` | **Runs on a Pico 2 W**: LED toggles every 500 ms, so the scheduler, the build and the CYW43 radio chip all work |
+| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) | **Commented out in `CMakeLists.txt`** until `btstack_config.h` exists; re-enable for the mesh |
+| `runtime/ipc`, `runtime/node_state`, `audio/`, `classifier/`, `mesh/` | Empty placeholders |
 
 ---
 
