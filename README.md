@@ -105,6 +105,8 @@ Everything runs locally. Out there, the cloud isn't an option.
 +---------------------------------------------------------+
 ```
 
+The classifier's TensorFlow Lite Micro comes from a pinned [pico-tflmicro](https://github.com/raspberrypi/pico-tflmicro) checkout outside the repo (see [decision 12](#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)).
+
 ### Base station (Pi 5) and app (laptop)
 
 ```
@@ -244,6 +246,17 @@ This was the biggest change during ideation. The original plan was to interlink 
 
 **Why:** The M33 has a hardware FPU and DSP instructions, which audio feature extraction and TensorFlow Lite Micro can use. It's also the most-tested path for the SDK's BLE stack. A RISC-V build was a side experiment, and the demo doesn't need it. See [docs/cpu-architecture.md](docs/cpu-architecture.md).
 
+### 12. TensorFlow Lite Micro from a pinned pico-tflmicro checkout
+
+**Decision:** Run the classifier on TensorFlow Lite Micro with the CMSIS-NN kernels, from Raspberry Pi's [pico-tflmicro](https://github.com/raspberrypi/pico-tflmicro) pinned at commit `dfea53b`. Our `firmware/classifier/classifier.cmake` builds it from a checkout next to the Pico SDK (or `$PICO_TFLMICRO_PATH`); it is not vendored, and `scripts/install-firmware-tooling.sh` clones it.
+
+**Why:**
+- It's the TFLM port in Raspberry Pi's GitHub org for the Pico, generated from upstream TFLM, so it builds against the Pico SDK we already use. Its README only mentions the RP2040, but it builds and runs on the Pico 2 W (`classifier_bench`).
+- The CMSIS-NN kernels use the M33's DSP instructions (see [decision 11](#11-arm-build-only)). On the board the classifier (model, TFLM, CMSIS-NN and feature code) takes ~215 KB of flash, a 48 KB arena (42.9 KB used) and 70.6 ms per inference.
+- Keyword spotting in the style of `micro_speech` is TFLM's reference use, which is the shape of our classifier (see [decision 3](#3-classifier-target-whistles-screams-and-help)). The int8 model gives the same scores on the board as TFLite on the PC.
+- Not vendored: the checkout is ~16 MB, and it's Apache-2.0 with bundled third-party code under its own licenses. Only the small pieces we compile on both the PC and the board (the audio microfrontend and KISS FFT) are vendored, in `firmware/classifier/third_party/`.
+- Pinned: upstream syncs TFLM wholesale and is maintained on a best-effort basis, so an unpinned clone can change kernels and APIs under us.
+
 ---
 
 ## Mesh protocol (Serranet)
@@ -360,7 +373,7 @@ The in-room volunteer takes matter: the corpus clips are mostly read speech reco
 2. **Extract features.** 16 kHz mono audio, 1-second windows → TFLM's audio microfrontend (30 ms frames every 20 ms, 40 filterbank channels → 49 × 40), the `micro_speech` recipe. The same C code runs on the Pico, so training and device features match. It covers the whistle band (roughly 2–4 kHz) as well as speech.
 3. **Train.** A small CNN in Python (managed with `uv`).
 4. **Quantize.** int8, to fit and run fast on the Pico.
-5. **Deploy.** Via TensorFlow Lite Micro on the Arm build, using CMSIS-NN optimized kernels where the Pico port supports them.
+5. **Deploy.** Via TensorFlow Lite Micro on the Arm build, using CMSIS-NN optimized kernels where the Pico port supports them. TFLM comes from Raspberry Pi's pico-tflmicro, pinned at `dfea53b` and cloned next to the Pico SDK by `scripts/install-firmware-tooling.sh` (see [decision 12](#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)). Only the firmware needs it; the Python pipeline uses TensorFlow from pip.
 6. **Pattern logic.** Count whistle detections over time to fill in `blast_count` (3 = distress pattern). Screams and "help" alert on a single confident detection, with `blast_count = 0`.
 7. **Thresholds.** Tune per-class confidence thresholds on held-out data, biased toward catching "help" (a missed call is worse than a false alarm), and check that ordinary talking stays under the threshold.
 
@@ -441,8 +454,12 @@ serra/
 ├── firmware/                # Pico 2 W node (C, Pico SDK 2.3.1), see firmware/README.md
 │   ├── runtime/             # inter-core handoff, node state, power budgets
 │   ├── audio/               # mic capture (PIO/I2S), wake trigger
-│   ├── classifier/          # int8 model + inference
+│   ├── classifier/          # int8 model + inference (TFLM from pico-tflmicro, outside the repo)
+│   │   └── third_party/     # vendored audio microfrontend + KISS FFT
 │   ├── mesh/                # BLE advertise/scan, flooding, dedup
+│   ├── tools/               # standalone board builds
+│   │   ├── classifier_bench/  # classifier on the board -> model/board_test.py
+│   │   └── mic_capture/     # INMP441 to the PC over USB -> model/record.py
 │   ├── main.c
 │   ├── CMakeLists.txt       # SDK build -> build/node.uf2
 │   ├── pico_sdk_import.cmake  # locates the SDK via $PICO_SDK_PATH
@@ -455,7 +472,7 @@ serra/
 ├── base-station/            # Pi 5: BLE listener, decoder, dedup -> writes to Supabase
 ├── app/                     # laptop: Supabase + map dashboard, optional Ollama LLM
 ├── scripts/
-│   ├── install-firmware-tooling.sh  # toolchain + Pico SDK setup (macOS, apt Linux)
+│   ├── install-firmware-tooling.sh  # toolchain + Pico SDK + pico-tflmicro setup (macOS, apt Linux)
 │   └── pico_setup.sh        # Raspberry Pi's full SDK/OpenOCD setup on the Pi 5
 ├── docs/
 │   ├── classifier-interface.md  # model -> firmware handoff: mic, runtime, C API, budgets
@@ -487,5 +504,6 @@ Licensed under the **GNU General Public License v3.0**. See [LICENSE](LICENSE). 
 
 Notes:
 - The Pico SDK is BSD-3-Clause.
+- TensorFlow Lite Micro (pico-tflmicro, built into the classifier) is Apache-2.0, per its file headers (the upstream README points to `src/tensorflow/LICENSE`, which the repo doesn't ship). Its bundled CMSIS, CMSIS-NN, flatbuffers and gemmlowp have their own `LICENSE` files under `src/third_party/`; ruy is Apache-2.0 via its file headers. Our vendored copies are listed in [`firmware/classifier/third_party/README.md`](firmware/classifier/third_party/README.md).
 - The CYW43 driver (`lib/cyw43-driver/LICENSE.RP`) and BTstack (`src/rp2_common/pico_btstack/LICENSE.RP`, both in the SDK) are licensed only for use with Raspberry Pi hardware. BTstack's grant covers the Pico 2 W and products built from it. Check both before any commercial use. Those terms add restrictions GPL-3.0 doesn't allow, so redistributing node firmware binaries may need a GPL linking exception for them. This is an open question, not settled.
 - Check the license of any dataset used for training.

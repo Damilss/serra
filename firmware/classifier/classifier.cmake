@@ -7,7 +7,9 @@
 # TensorFlow Lite Micro comes from a pico-tflmicro checkout
 # (https://github.com/raspberrypi/pico-tflmicro, tested at commit dfea53b). Point
 # PICO_TFLMICRO_PATH at it, as an environment variable or with -D; the default is a
-# `pico-tflmicro` folder next to the Pico SDK.
+# `pico-tflmicro` folder next to the Pico SDK. scripts/install-firmware-tooling.sh clones
+# it there at the pinned commit. The full SHA is PICO_TFLMICRO_COMMIT in that script;
+# when moving the pin, update the commit above too.
 
 set(SERRA_CLASSIFIER_DIR ${CMAKE_CURRENT_LIST_DIR})
 
@@ -21,8 +23,10 @@ endif()
 set(PICO_TFLMICRO_PATH "${PICO_TFLMICRO_PATH}" CACHE PATH "pico-tflmicro checkout")
 if (NOT EXISTS ${PICO_TFLMICRO_PATH}/src/tensorflow/lite/micro/micro_interpreter.h)
     message(FATAL_ERROR
-        "pico-tflmicro not found at ${PICO_TFLMICRO_PATH}. Clone "
-        "https://github.com/raspberrypi/pico-tflmicro and set PICO_TFLMICRO_PATH.")
+        "pico-tflmicro not found at ${PICO_TFLMICRO_PATH}. Run "
+        "scripts/install-firmware-tooling.sh, or clone "
+        "https://github.com/raspberrypi/pico-tflmicro (commit dfea53b) and set "
+        "PICO_TFLMICRO_PATH.")
 endif()
 
 # ---- TensorFlow Lite Micro with the CMSIS-NN kernels ----

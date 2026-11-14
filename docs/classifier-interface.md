@@ -31,7 +31,7 @@ Source: INMP441 datasheet DS-INMP441-00 rev 1.1 (Electrical Characteristics, Tim
 | | |
 |---|---|
 | Target | Pico 2 W, **Arm Cortex-M33** build (`PICO_BOARD=pico2_w`), Pico SDK 2.3.1. No RISC-V |
-| Inference engine | **TensorFlow Lite Micro** with CMSIS-NN kernels, from a [`pico-tflmicro`](https://github.com/raspberrypi/pico-tflmicro) checkout (tested at commit `dfea53b`), int8 model. `firmware/classifier/classifier.cmake` builds it; set `PICO_TFLMICRO_PATH`, or clone it next to the Pico SDK |
+| Inference engine | **TensorFlow Lite Micro** with CMSIS-NN kernels, from a [`pico-tflmicro`](https://github.com/raspberrypi/pico-tflmicro) checkout (tested at commit `dfea53b`), int8 model. Not vendored: `scripts/install-firmware-tooling.sh` clones it at that commit. `firmware/classifier/classifier.cmake` finds it through `PICO_TFLMICRO_PATH` (default: a `pico-tflmicro` folder next to the Pico SDK, where the script puts it) and builds it |
 | Language | Our module is C++ internally (TFLM is C++) with a **plain C header**, so `main.c` stays C. CMake already enables CXX |
 | Feature extraction | TFLM's audio "microfrontend" (C). Same code computes features in training, so the board sees what the model was trained on |
 | Threading | Call everything from **one core** (plan: core 1 = audio + classifier, core 0 = radio + mesh). Never blocks, never busy-waits. Fits your `pico_cyw43_arch_poll` loop on core 0: pass results across with a `queue_t` |
@@ -86,6 +86,7 @@ First trained model: **24,997 parameters, 47 KB** as an int8 `.tflite`, ~2.7 M m
 - [ ] Agree on the pins (section 1) and who writes the PIO I2S driver. **Proposal:** the model side writes it, since we also need it to record training data through the real mic.
 - [ ] Agree on the C API (section 3).
 - [x] `pico-tflmicro` builds for `pico2_w` on SDK 2.3.1 with GCC 15 (two workarounds, both in `classifier.cmake`) and gives the same scores as TFLite on the PC.
+- [x] `pico-tflmicro` is a documented dependency ([README design decision 12](../README.md#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)) and `scripts/install-firmware-tooling.sh` clones it at the pinned commit.
 - [x] Measure arena size and inference time on a Pico 2 W (section 4).
 - [ ] Test the wake level, event grouping and blast counting against real whistles and shouts; so far they have only seen synthetic audio.
 - [ ] Merge `docs/sdk-help-detection` into `main`. Until then, `main`'s README still has the old `alert_payload_t` (`WHISTLE, VOICE`, unsigned `peak_level`); this doc follows the new one.

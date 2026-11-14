@@ -8,7 +8,8 @@
 #   cmake --build firmware/tools/classifier_bench/build
 #   picotool load -f -x firmware/tools/classifier_bench/build/classifier_bench.uf2
 #
-# Needs a pico-tflmicro checkout: see firmware/classifier/classifier.cmake.
+# Needs a pico-tflmicro checkout (scripts/install-firmware-tooling.sh clones it; see
+# firmware/classifier/classifier.cmake).
 
 cmake_minimum_required(VERSION 3.13)
 

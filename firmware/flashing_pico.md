@@ -37,7 +37,7 @@ A plain Pico 2 runs a `pico2_w` image without crashing, but the radio never star
 ## One-time setup
 
 ```sh
-scripts/install-firmware-tooling.sh                 # arm-none-eabi-gcc, cmake, ninja, picotool, SDK 2.3.1
+scripts/install-firmware-tooling.sh                 # arm-none-eabi-gcc, cmake, ninja, picotool, SDK 2.3.1, pico-tflmicro
 export PICO_SDK_PATH="$HOME/pico/pico-sdk"          # add to ~/.bashrc or ~/.zshrc
 cp "$PICO_SDK_PATH/external/pico_sdk_import.cmake" firmware/
 picotool version                                    # must be ≥ 2.0 (1.x doesn't know the RP2350)

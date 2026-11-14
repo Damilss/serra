@@ -8,3 +8,5 @@ Vendored unmodified. Don't reformat or edit these; update by copying a newer ups
 | `kissfft/` | KISS FFT, the FFT the microfrontend calls. Built with `FIXED_POINT=16` | Copied from [pico-tflmicro](https://github.com/raspberrypi/pico-tflmicro) `src/third_party/kissfft`, commit `dfea53b` | BSD-3-Clause (`kissfft/COPYING`) |
 
 Both are compiled twice: into the node firmware, and into a host shared library by `model/features.py`, so training and the board compute identical features.
+
+TensorFlow Lite Micro itself (with CMSIS-NN) is not vendored. It comes from a [pico-tflmicro](https://github.com/raspberrypi/pico-tflmicro) checkout at commit `dfea53b` (Apache-2.0; its bundled third-party code is under its own licenses, mostly Apache-2.0), which `scripts/install-firmware-tooling.sh` clones next to the Pico SDK. See [`../classifier.cmake`](../classifier.cmake) for how the build finds it.

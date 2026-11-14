@@ -149,7 +149,7 @@ Tips: several short files beat one long one (files, not seconds, are split into 
 | `dev_ui.py` | Browser page for the same thing with one start/stop button, plus a live test of the classifier on the Pico. Flashes the firmware it needs |
 | `predict.py` | Runs the int8 model over a recording |
 | `stream_test.py` | Tests the int8 model on a simulated live stream: events caught, false alerts per hour |
-| `board_test.py` | Reads arena size and timing from a Pico running `firmware/tools/classifier_bench`, checks its scores against the PC, and prints what it hears live |
+| `board_test.py` | Reads arena size and timing from a Pico running `firmware/tools/classifier_bench`, checks its scores against the PC, and prints what it hears live. Building `classifier_bench` needs TensorFlow Lite Micro (`pico-tflmicro`), which `scripts/install-firmware-tooling.sh` installs; `mic_capture` and training don't |
 
 ---
 
