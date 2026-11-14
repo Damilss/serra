@@ -11,6 +11,7 @@
 #include "mesh/mesh.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
+#include "runtime/ipc.h"
 
 /**
  * BLINK_PERIOD_MS - LED toggle interval; 1000 ms = one blink every 2 s
@@ -38,6 +39,11 @@ int main(void) {
 
 	if (mesh_init()) {
 		printf("[main] mesh_init failed\n");
+		return 1;
+	}
+
+	if (ipc_init()) {
+		printf("[main] ipc_init failed\n");
 		return 1;
 	}
 

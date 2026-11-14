@@ -34,6 +34,7 @@ add_executable(node
     mesh/mesh.c
     mesh/tx_queue.c
     mesh/console.c
+    runtime/ipc.c
 )
 
 # btstack_config.h lives next to this file; BTstack includes it by name.
