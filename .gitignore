@@ -1,0 +1,24 @@
+# Mac stuff
+.DS_Store
+
+# executables
+*.out
+out
+a.out
+
+# vim
+*.swp
+
+# make
+build/
+build_*/
+
+# python
+.venv/
+__pycache__/
+
+# datasets and recordings (see model/data/README.md)
+model/data/*
+!model/data/.gitkeep
+!model/data/README.md
+model/out/
