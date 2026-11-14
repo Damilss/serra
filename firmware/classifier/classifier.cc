@@ -28,8 +28,9 @@ namespace {
 /**
  * kArenaBytes - TFLM's working memory
  *
- * the model needs CLASSIFIER_ARENA_USED of it (measured on a Pico 2 W by
- * tools/classifier_bench); the rest is margin for a retrained model.
+ * the model uses part of it (classifier_stats_t.arena_used, measured on a
+ * Pico 2 W by tools/classifier_bench); the rest is margin for a retrained
+ * model.
  */
 constexpr size_t kArenaBytes = 48 * 1024;
 
