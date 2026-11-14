@@ -7,7 +7,8 @@
 # check would otherwise look like a bare "failed to push some refs".
 
 exec 1>&2
-export NO_COLOR=1 FORCE_COLOR=0
+unset FORCE_COLOR   # VS Code sets it; with NO_COLOR too, Node warns once per process
+export NO_COLOR=1
 
 if ! command -v node >/dev/null 2>&1; then
   echo "pre-push: node not found on PATH, so the checks can't run."
