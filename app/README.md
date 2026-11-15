@@ -27,7 +27,7 @@ Built with **Next.js 16** (App Router), **React 19**, **TypeScript**, **Tailwind
 
 ## Quick start
 
-Needs **Node.js 20.9 or newer**. Run everything from this folder (`app/`).
+Needs **Node.js 26** (Active LTS), pinned in [`.nvmrc`](.nvmrc): with nvm or fnm, run `nvm install` / `fnm use` here. Some dev tools refuse anything older than 22.22. Run everything from this folder (`app/`).
 
 ```bash
 npm install                        # dependencies, and turns on the repo's git hooks

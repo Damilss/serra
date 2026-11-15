@@ -5,7 +5,7 @@
 # Date: 2026-11-14
 #
 # Installs the tooling to develop, test and run the base station dashboard (app/):
-#   - Node.js >= 20.9     Next.js 16 needs it (npm comes with it)
+#   - Node.js             the major line pinned in app/.nvmrc (npm comes with it)
 #   - npm packages        from app/package-lock.json (npm ci), which also turns on
 #                         the repo-wide git hooks in app/.husky
 #   - Playwright Chromium the browser the E2E tests run in
@@ -35,12 +35,6 @@ set -euo pipefail
 DRY_RUN="${DRY_RUN:-0}"
 SKIP_DOCKER="${SKIP_DOCKER:-0}"
 
-# Oldest Node.js Next.js 16 runs on, and the LTS line installed when Node is
-# missing or too old.
-NODE_MIN_MAJOR=20
-NODE_MIN_MINOR=9
-NODE_LTS_MAJOR=24
-
 # gitleaks release installed on Linux (apt's is too old for `gitleaks git`).
 GITLEAKS_VERSION=8.30.1
 GITLEAKS_MIN_MAJOR=8
@@ -51,6 +45,10 @@ SUPABASE_CLI_VERSION=3.1.0
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="$REPO_ROOT/app"
+
+# Node.js major line the app is developed and tested on. app/.nvmrc is the one
+# place it's pinned (nvm and fnm read it too); main() fills this in.
+NODE_MAJOR=
 
 # ---- output helpers ----------------------------------------------------------
 
@@ -99,10 +97,32 @@ node_version() {
 	fi
 }
 
+# Major line pinned in app/.nvmrc ("26" or "v26.13.1" -> "26"). Fails if the
+# file is missing or doesn't start with a version.
+pinned_node_major() {
+	local pin re='^v?([0-9]+)'
+	[[ -f "$APP_DIR/.nvmrc" ]] || return 1
+	read -r pin <"$APP_DIR/.nvmrc" || [[ -n "$pin" ]] || return 1
+	[[ "$pin" =~ $re ]] || return 1
+	echo "${BASH_REMATCH[1]}"
+}
+
+# True if the node on PATH is the major line pinned in app/.nvmrc.
 node_ok() {
 	local major minor
 	read -r major minor <<<"$(node_version)"
-	version_at_least "$major" "$minor" "$NODE_MIN_MAJOR" "$NODE_MIN_MINOR"
+	[[ "$major" == "$NODE_MAJOR" ]]
+}
+
+# Dies when the node on PATH comes from a version manager (nvm, fnm, volta...)
+# rather than the system package manager under $1, since installing Node there
+# wouldn't change which node runs.
+die_if_node_is_managed_elsewhere() {
+	local path
+	have node || return 0
+	path="$(command -v node)"
+	[[ "$path" == "$1"/* ]] && return 0
+	die "Node.js $(node --version) at $path isn't the pinned $NODE_MAJOR (app/.nvmrc) and isn't from the system package manager: run 'fnm use' or 'nvm install' in app/, then re-run"
 }
 
 # "major minor" of the installed gitleaks ("8.30.1" or "v8.30.1" -> "8 30"), or "0 0".
@@ -203,20 +223,21 @@ apt_install() {
 }
 
 # Node.js from NodeSource: Debian and Ubuntu's own nodejs package is older than
-# Next.js 16 supports.
+# the pinned line, and NodeSource has one apt repository per major line.
 install_node_linux() {
 	if node_ok; then
 		notice "Node.js $(node --version) is installed"
 		return
 	fi
-	have node && warn "Node.js $(node --version) is too old (need >= $NODE_MIN_MAJOR.$NODE_MIN_MINOR)"
+	die_if_node_is_managed_elsewhere /usr/bin
+	have node && warn "Node.js $(node --version) is installed, but app/.nvmrc pins Node.js $NODE_MAJOR"
 
-	notice "installing Node.js $NODE_LTS_MAJOR LTS from NodeSource"
+	notice "installing Node.js $NODE_MAJOR from NodeSource"
 	apt_install ca-certificates curl
 	if [[ "$DRY_RUN" == 1 ]]; then
-		echo "+ curl -fsSL https://deb.nodesource.com/setup_$NODE_LTS_MAJOR.x | sudo -E bash -"
+		echo "+ curl -fsSL https://deb.nodesource.com/setup_$NODE_MAJOR.x | sudo -E bash -"
 	else
-		curl -fsSL "https://deb.nodesource.com/setup_$NODE_LTS_MAJOR.x" | sudo -E bash - ||
+		curl -fsSL "https://deb.nodesource.com/setup_$NODE_MAJOR.x" | sudo -E bash - ||
 			die "adding the NodeSource repository failed"
 	fi
 	apt_install nodejs
@@ -318,6 +339,42 @@ install_homebrew() {
 	have brew || die "Homebrew installed but brew is not on PATH; open a new terminal and re-run"
 }
 
+# Homebrew formula that provides Node.js $NODE_MAJOR. "node@<major>" is an alias
+# of "node" while that line is the newest release, and its own keg-only formula
+# once a newer line takes over "node". Fails if Homebrew has no such line.
+node_formula_macos() {
+	local info re='^==> ([^:]+):'
+	info="$(brew info --formula "node@$NODE_MAJOR" 2>/dev/null)" || return 1
+	[[ "$info" =~ $re ]] || return 1
+	echo "${BASH_REMATCH[1]}"
+}
+
+# Node.js from Homebrew. A keg-only node@<major> isn't on PATH until it's
+# linked, and Homebrew's "node" has to be unlinked first to make room.
+install_node_macos() {
+	local prefix formula
+	prefix="$(brew --prefix 2>/dev/null || echo /opt/homebrew)"
+	die_if_node_is_managed_elsewhere "$prefix"
+	have node && warn "Node.js $(node --version) is installed, but app/.nvmrc pins Node.js $NODE_MAJOR"
+	formula="$(node_formula_macos)" || die "Homebrew has no Node.js $NODE_MAJOR (node@$NODE_MAJOR); check app/.nvmrc"
+
+	notice "installing Node.js $NODE_MAJOR (Homebrew $formula)"
+	if [[ "$formula" == node ]]; then
+		if brew list --formula node >/dev/null 2>&1; then
+			run brew upgrade node
+		else
+			run brew install node
+		fi
+	else
+		run brew install "$formula"
+		if brew list --formula node >/dev/null 2>&1; then
+			run brew unlink node
+		fi
+		run brew link --overwrite --force "$formula"
+	fi
+	hash -r
+}
+
 install_macos() {
 	if have brew; then
 		notice "Homebrew is installed"
@@ -334,15 +391,8 @@ install_macos() {
 
 	if node_ok; then
 		notice "Node.js $(node --version) is installed"
-	elif have node; then
-		warn "Node.js $(node --version) is too old (need >= $NODE_MIN_MAJOR.$NODE_MIN_MINOR)"
-		if brew list --formula node >/dev/null 2>&1; then
-			run brew upgrade node
-		else
-			die "this Node.js isn't from Homebrew: upgrade it with your version manager (nvm, fnm, volta) and re-run"
-		fi
 	else
-		run brew install node
+		install_node_macos
 	fi
 
 	if gitleaks_ok; then
@@ -369,6 +419,8 @@ main() {
 	local os
 	os="$(uname -s)"
 	notice "kernel: $os"
+	NODE_MAJOR="$(pinned_node_major)" || die "app/.nvmrc is missing or doesn't name a Node.js version"
+	notice "Node.js $NODE_MAJOR pinned in app/.nvmrc"
 	[[ "$DRY_RUN" == 1 ]] && notice "dry run: nothing will be installed"
 	[[ "$SKIP_DOCKER" == 1 ]] && notice "SKIP_DOCKER=1: leaving out Docker and the Supabase CLI"
 
@@ -379,7 +431,7 @@ main() {
 	esac
 
 	if [[ "$DRY_RUN" != 1 ]]; then
-		node_ok || die "Node.js >= $NODE_MIN_MAJOR.$NODE_MIN_MINOR is required; open a new terminal and re-run"
+		node_ok || die "Node.js $NODE_MAJOR (app/.nvmrc) is required, found $(node --version 2>/dev/null || echo none); open a new terminal and re-run"
 	fi
 	install_app
 
