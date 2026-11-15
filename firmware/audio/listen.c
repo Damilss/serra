@@ -56,13 +56,18 @@ typedef struct listen_calib {
  *   new offset = current offset + (LISTEN_CALIB_TARGET_DB_X10 - level)
  * so the tone reads 80.0 dB on every node.
  *
- * TODO: all 0 until measured. 0x2d9a's mic sends a raw bitstream and reads much
- * hotter than the two I2S mics, so its offset will be the most negative.
+ * measured 2026-11-14: 1 kHz tone from a phone at a fixed volume and distance,
+ * median of each node's level readings (spikes dropped). good to about +/- 3 dB:
+ *   0x0b16  I2S        median -62.3 dB over 21 readings
+ *   0x2d9a  bitstream  median -54.5 dB over two runs; noisiest, ~8 dB spread
+ *   0xed70  I2S        median -56.7 dB over 8 readings, 1.6 dB spread
+ * re-measure in the demo room if time allows (all nodes in one sitting, phone
+ * fixed in place).
  */
 static const listen_calib_t calib_table[] = {
-	{0x0b16, 0},
-	{0x2d9a, 0},
-	{0xed70, 0},
+	{0x0b16, 1423},
+	{0x2d9a, 1355},
+	{0xed70, 1367},
 };
 
 /**
