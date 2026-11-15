@@ -1694,14 +1694,6 @@ input[type='range'] {
     display: none;
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
-  }
-}
 
 /* ───────────── Field / Venue demo tabs ───────────── */
 .site-nav a {

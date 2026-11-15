@@ -3,7 +3,7 @@
 // The base station's start-up log on the welcome screen, revealed one line at a time.
 
 import { useEffect, useState } from 'react';
-import { hm, pad, prefersReducedMotion } from '@/lib/format';
+import { hm, pad } from '@/lib/format';
 import { NODES } from '@/lib/geo';
 import { MESH_MAGIC } from '@/lib/packets';
 import { SerranetMark } from '../brand/Logos';
@@ -27,10 +27,6 @@ export function BootLog() {
   useEffect(() => {
     const t0 = performance.now();
     const stamp = () => ((performance.now() - t0) / 1000).toFixed(2).padStart(6, '0');
-    if (prefersReducedMotion()) {
-      const id = setTimeout(() => setLines(BOOT.map((_, i) => ({ t: stamp(), i }))));
-      return () => clearTimeout(id);
-    }
     const timers = BOOT.map((_, i) =>
       setTimeout(() => setLines((l) => [...l, { t: stamp(), i }]), 450 + i * 280 + (i > 3 ? 200 : 0)),
     );

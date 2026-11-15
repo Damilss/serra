@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from 'react';
 import { createVenueRenderer } from '@/lib/draw/venue';
-import { now, prefersReducedMotion } from '@/lib/format';
+import { now } from '@/lib/format';
 import { useVenue } from '@/lib/venueStore';
 
 export function VenueMap() {
@@ -18,7 +18,6 @@ export function VenueMap() {
     const box = boxRef.current!;
     const r = createVenueRenderer(cvRef.current!);
     rendererRef.current = r;
-    const RM = prefersReducedMotion();
     const fit = () => {
       const b = box.getBoundingClientRect();
       r.resize(b.width, b.height, useVenue.getState().layout);
@@ -35,7 +34,7 @@ export function VenueMap() {
     let raf = 0;
     const frame = () => {
       const s = useVenue.getState();
-      r.draw({ t: now(), layout: s.layout, calls: s.calls, showTruth: s.showTruth, reducedMotion: RM });
+      r.draw({ t: now(), layout: s.layout, calls: s.calls, showTruth: s.showTruth });
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);

@@ -5,7 +5,6 @@
 
 import { useEffect, useRef } from 'react';
 import { A, C, monoFont, sizeCanvas } from '@/lib/brand';
-import { prefersReducedMotion } from '@/lib/format';
 import { contours, type Peak } from '@/lib/terrain';
 
 const WPEAKS: Peak[] = [
@@ -32,7 +31,6 @@ export function WelcomeCanvas() {
 
   useEffect(() => {
     const cv = ref.current!;
-    const RM = prefersReducedMotion();
     let W = 0;
     let H = 0;
     let c: CanvasRenderingContext2D;
@@ -66,7 +64,7 @@ export function WelcomeCanvas() {
         c.lineTo(W, y);
         c.stroke();
       }
-      contours(c, W, H, 14, RM ? 0 : t, WPEAKS, LEVELS, (cx, k) => {
+      contours(c, W, H, 14, t, WPEAKS, LEVELS, (cx, k) => {
         cx.lineWidth = k % 3 === 1 ? 1.4 : 1;
         cx.strokeStyle = A(C.moss, k % 3 === 1 ? 0.3 : 0.16);
       });
@@ -80,7 +78,7 @@ export function WelcomeCanvas() {
         c.fillText(s, x * W, y * H);
       }
       // the one Flare: a node making a call, three rings carrying outward
-      if (!RM && t - lastRipple > 3.6) {
+      if (t - lastRipple > 3.6) {
         lastRipple = t;
         ripples.push(t, t + 0.45, t + 0.9);
       }
@@ -119,16 +117,12 @@ export function WelcomeCanvas() {
           c.fillText(n.l, x + 13, y);
         }
       }
-      if (!RM) raf = requestAnimationFrame(draw);
+      raf = requestAnimationFrame(draw);
     };
 
-    const onResize = () => {
-      size();
-      if (RM) draw(0);
-    };
+    const onResize = () => size();
     size();
-    if (RM) draw(0);
-    else raf = requestAnimationFrame(draw);
+    raf = requestAnimationFrame(draw);
     window.addEventListener('resize', onResize);
     return () => {
       cancelAnimationFrame(raf);

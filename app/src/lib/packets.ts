@@ -57,17 +57,15 @@ export function buildPacket(src: number, x: PacketInput, time = new Date()): Pac
   if (x.kind === 'alert') {
     const c = Math.round(x.conf * 255);
     const cl = CLS[x.cls];
+    // Whistles only (3 = distress pattern); the firmware sends 0 for SCREAM and HELP.
+    // cl.bursts drives the waveform animation and is not this field.
+    const blasts = x.cls === 'whistle' ? cl.bursts.length : 0;
     fields.push(
       F('class_id', [cl.id], cl.word.toUpperCase(), 'pl'),
       F('confidence', [c], `${c}/255 · ${x.conf.toFixed(2)}`, 'pl'),
       F('peak_level', i16(x.peak), `${x.peak} · ${db(x.peak)} dB`, 'pl'),
       F('timestamp', u32(x.uptime), `${(x.uptime / 1000).toFixed(1)} s uptime`, 'pl'),
-      F(
-        'blast_count',
-        [cl.bursts.length],
-        `${cl.bursts.length}${x.cls === 'whistle' ? ' · distress pattern' : ''}`,
-        'pl',
-      ),
+      F('blast_count', [blasts], blasts ? `${blasts} · distress pattern` : '0 · not a whistle', 'pl'),
     );
   } else {
     const mv = Math.round(n.volts * 1000);

@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createMapRenderer } from '@/lib/draw/map';
-import { now, prefersReducedMotion } from '@/lib/format';
+import { now } from '@/lib/format';
 import { currentAlert, incomingAlert, replayAlert, useDashboard } from '@/lib/store';
 
 function MapTag() {
@@ -35,7 +35,6 @@ export function MapView() {
     const box = boxRef.current!;
     const r = createMapRenderer(cvRef.current!, (src) => useDashboard.getState().heartbeat(src));
     rendererRef.current = r;
-    const RM = prefersReducedMotion();
 
     const fit = () => {
       const b = box.getBoundingClientRect();
@@ -61,7 +60,6 @@ export function MapView() {
         selT: s.selT,
         live: currentAlert(s.alerts) ?? null,
         replay: ra && s.replay ? { a: ra, e: s.replay.e } : null,
-        reducedMotion: RM,
       });
       raf = requestAnimationFrame(frame);
     };

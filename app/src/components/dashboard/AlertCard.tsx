@@ -3,14 +3,12 @@
 // The Fog alert card for the open alert. Hidden while the alert is still relaying.
 
 import { CLS, readings } from '@/lib/alerts';
-import { hms, prefersReducedMotion } from '@/lib/format';
+import { hms } from '@/lib/format';
 import { currentAlert, useDashboard } from '@/lib/store';
 import { Summary } from './Summary';
 
 export const scrollToMap = () =>
-  document
-    .getElementById('map')
-    ?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'center' });
+  document.getElementById('map')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
 export function AlertCard() {
   const a = useDashboard((s) => currentAlert(s.alerts));

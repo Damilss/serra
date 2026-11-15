@@ -75,11 +75,13 @@ function CopyId({ uid }: { uid: string }) {
       className="copy"
       id="copy"
       onClick={async (e) => {
+        // React clears currentTarget once the handler awaits, so grab the button first
+        const btn = e.currentTarget;
         try {
           await navigator.clipboard.writeText(uid);
           setLabel('Copied');
         } catch {
-          const code = e.currentTarget.parentElement?.querySelector('code');
+          const code = btn.parentElement?.querySelector('code');
           if (code) {
             const r = document.createRange();
             r.selectNodeContents(code);

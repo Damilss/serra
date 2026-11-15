@@ -6,7 +6,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { prefersReducedMotion } from '@/lib/format';
 import { SerraLogo } from '../brand/Logos';
 import { playLoader } from '../Loader';
 import { BootLog } from './BootLog';
@@ -22,8 +21,7 @@ export function Welcome() {
 
   const enter = (e: React.MouseEvent) => {
     e.preventDefault();
-    if (prefersReducedMotion()) router.push('/dashboard');
-    else playLoader(() => router.push('/dashboard'));
+    playLoader(() => router.push('/dashboard'));
   };
 
   return (

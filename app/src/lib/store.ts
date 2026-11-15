@@ -139,8 +139,7 @@ export const useDashboard = create<DashboardState>()((set, get) => ({
   startReplay: (id) => {
     const a = get().alerts.find((x) => x.id === id);
     if (!a) return;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    set({ replay: { alertId: id, e: 0, playing: !reduced }, sel: a.src, selT: now() });
+    set({ replay: { alertId: id, e: 0, playing: true }, sel: a.src, selT: now() });
   },
   exitReplay: () => set({ replay: null }),
   toggleReplay: () => {

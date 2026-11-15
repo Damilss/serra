@@ -1,7 +1,7 @@
 'use client';
 
 // Loading screen between the welcome page and the dashboard: the call mark's arcs turn into three
-// circles and all four orbit. Purely for show (about 3.5 s); skipped with reduced motion.
+// circles and all four orbit. Purely for show (about 3.5 s).
 // Lives in the root layout so it survives the route change and can fade out over the dashboard.
 
 import { useRouter } from 'next/navigation';

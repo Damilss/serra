@@ -21,7 +21,6 @@ export interface VenueFrame {
   layout: VenueLayout;
   calls: VenueCall[];
   showTruth: boolean;
-  reducedMotion: boolean;
 }
 
 /** When each stage of a call happens, in seconds after the call. */
@@ -148,7 +147,7 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
       }
 
       const call = f.calls[0];
-      const e = call ? (f.reducedMotion ? 1e3 : f.t - call.t0) : -1;
+      const e = call ? f.t - call.t0 : -1;
       const tl = call ? callTimeline(layout, call) : null;
       const levels = call ? call.readings.map((r) => r.peak / 10) : [];
       const loudest = levels.length ? levels.indexOf(Math.max(...levels)) : -1;
@@ -189,7 +188,7 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
         c.arc(ex, ey, r, 0, 7);
         c.fill();
         c.setLineDash([4, 5]);
-        c.lineDashOffset = f.reducedMotion ? 0 : -f.t * 8;
+        c.lineDashOffset = -f.t * 8;
         c.strokeStyle = A(C.flare, 0.9);
         c.lineWidth = 1.5;
         c.beginPath();
@@ -246,14 +245,12 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
         } else if (heard) {
           c.fillStyle = A(C.flare, 0.5 + 0.35 * q);
         } else {
-          if (!f.reducedMotion) {
-            const k = (f.t * 0.35 + i * 0.27) % 1;
-            c.strokeStyle = A(C.moss, (1 - k) * 0.3);
-            c.lineWidth = 1;
-            c.beginPath();
-            c.arc(x, y, 7 + k * 20, 0, 7);
-            c.stroke();
-          }
+          const k = (f.t * 0.35 + i * 0.27) % 1;
+          c.strokeStyle = A(C.moss, (1 - k) * 0.3);
+          c.lineWidth = 1;
+          c.beginPath();
+          c.arc(x, y, 7 + k * 20, 0, 7);
+          c.stroke();
           c.fillStyle = C.moss;
         }
         c.beginPath();

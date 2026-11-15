@@ -21,7 +21,6 @@ export interface MapFrame {
   live: Alert | null;
   /** The replayed alert and seconds since its call, if replaying. */
   replay: { a: Alert; e: number } | null;
-  reducedMotion: boolean;
 }
 
 interface Heartbeat {
@@ -134,7 +133,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
    * confirming nodes when the sound reaches them, the flood along the mesh to the base, and once it
    * arrives, the search area narrowing onto the loudness-weighted fix.
    */
-  function drawAlert(c: CanvasRenderingContext2D, a: Alert, e: number, t: number, RM: boolean) {
+  function drawAlert(c: CanvasRenderingContext2D, a: Alert, e: number, t: number) {
     const [sx, sy] = P(NODES[a.src]);
     const cl = CLS[a.cls];
     for (const b of cl.bursts) {
@@ -216,7 +215,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
     });
     if (e < a.T) return;
     // confirmations narrow the search: the area starts wide and shrinks onto the fix
-    const nk = RM ? 1 : Math.min(1, (e - a.T) / 1.4);
+    const nk = Math.min(1, (e - a.T) / 1.4);
     const rM = a.est.r * (1 + 1.6 * Math.pow(1 - nk, 3));
     const ex = a.est.x * MW;
     const ey = a.est.y * MH;
@@ -233,7 +232,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
       c.stroke();
     }
     c.setLineDash([]);
-    const pulse = RM ? 0 : (Math.sin(t * 2.4) + 1) / 2;
+    const pulse = (Math.sin(t * 2.4) + 1) / 2;
     c.fillStyle = A(C.flare, 0.08);
     c.beginPath();
     c.ellipse(ex, ey, rx, ry, 0, 0, 7);
@@ -241,7 +240,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
     c.strokeStyle = A(C.flare, 0.85);
     c.lineWidth = 1.5;
     c.setLineDash([4, 5]);
-    c.lineDashOffset = RM ? 0 : -t * 8;
+    c.lineDashOffset = -t * 8;
     c.beginPath();
     c.ellipse(ex, ey, rx, ry, 0, 0, 7);
     c.stroke();
@@ -275,7 +274,6 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
     draw(f: MapFrame) {
       const c = ctx;
       if (!c || !off) return;
-      const RM = f.reducedMotion;
       c.clearRect(0, 0, MW, MH);
       c.drawImage(off, 0, 0, MW, MH);
       c.lineWidth = 1;
@@ -292,7 +290,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
       c.strokeStyle = A(C.fog, 0.8);
       c.lineWidth = 1.5;
       c.setLineDash([6, 6]);
-      c.lineDashOffset = RM ? 0 : -f.t * 18;
+      c.lineDashOffset = -f.t * 18;
       c.beginPath();
       pathToBase(f.sel).forEach((i, k) => {
         const [x, y] = P(NODES[i]);
@@ -302,35 +300,33 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
       c.stroke();
       c.setLineDash([]);
       // heartbeats hopping to the base
-      if (!RM) {
-        if (f.t - lastSpawn > 1.5) {
-          lastSpawn = f.t;
-          const src = 1 + ((Math.random() * 5) | 0);
-          hbs.push({ src, path: pathToBase(src), seg: 0, p: 0 });
-        }
-        for (const k of hbs) {
-          k.p += f.dt * 1.5;
-          if (k.p >= 1) {
-            k.p = 0;
-            k.seg++;
-          }
-        }
-        hbs = hbs.filter((k) => {
-          if (k.seg < k.path.length - 1) return true;
-          onHeartbeat(k.src);
-          return false;
-        });
-        c.fillStyle = A(C.fog, 0.85);
-        for (const k of hbs) {
-          const [x1, y1] = P(NODES[k.path[k.seg]]);
-          const [x2, y2] = P(NODES[k.path[k.seg + 1]]);
-          c.beginPath();
-          c.arc(x1 + (x2 - x1) * k.p, y1 + (y2 - y1) * k.p, 2.2, 0, 7);
-          c.fill();
+      if (f.t - lastSpawn > 1.5) {
+        lastSpawn = f.t;
+        const src = 1 + ((Math.random() * 5) | 0);
+        hbs.push({ src, path: pathToBase(src), seg: 0, p: 0 });
+      }
+      for (const k of hbs) {
+        k.p += f.dt * 1.5;
+        if (k.p >= 1) {
+          k.p = 0;
+          k.seg++;
         }
       }
-      if (f.replay) drawAlert(c, f.replay.a, f.replay.e, f.t, RM);
-      else if (f.live) drawAlert(c, f.live, f.t - f.live.start, f.t, RM);
+      hbs = hbs.filter((k) => {
+        if (k.seg < k.path.length - 1) return true;
+        onHeartbeat(k.src);
+        return false;
+      });
+      c.fillStyle = A(C.fog, 0.85);
+      for (const k of hbs) {
+        const [x1, y1] = P(NODES[k.path[k.seg]]);
+        const [x2, y2] = P(NODES[k.path[k.seg + 1]]);
+        c.beginPath();
+        c.arc(x1 + (x2 - x1) * k.p, y1 + (y2 - y1) * k.p, 2.2, 0, 7);
+        c.fill();
+      }
+      if (f.replay) drawAlert(c, f.replay.a, f.replay.e, f.t);
+      else if (f.live) drawAlert(c, f.live, f.t - f.live.start, f.t);
 
       // which nodes have heard the call so far (replay time or live time)
       const view = f.replay ?? (f.live ? { a: f.live, e: f.t - f.live.start } : null);
@@ -357,7 +353,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
         }
         const hv = heardNow.get(i);
         // quiet listening pulse
-        if (!RM && !hv) {
+        if (!hv) {
           const k = (f.t * 0.35 + i * 0.21) % 1;
           c.strokeStyle = A(C.moss, (1 - k) * 0.28);
           c.lineWidth = 1;
@@ -425,7 +421,7 @@ export function createMapRenderer(cv: HTMLCanvasElement, onHeartbeat: (src: numb
       });
       // selection ring
       const [sx, sy] = P(NODES[f.sel]);
-      const k = RM ? 1 : Math.min(1, (f.t - f.selT) / 0.4);
+      const k = Math.min(1, (f.t - f.selT) / 0.4);
       const ease = 1 - Math.pow(1 - k, 3);
       c.strokeStyle = A(C.fog, 0.9);
       c.lineWidth = 1.5;

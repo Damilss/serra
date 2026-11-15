@@ -65,8 +65,13 @@ const spread = (d: number) => 20 * Math.log10(Math.max(d, MIN_D));
 
 /** Fits within this much squared error of the best count as equally good, dB². */
 const TIE_DB2 = 1;
-/** Radius of one solution lobe, metres. */
-const LOBE_M = 1.2;
+/**
+ * Two dips in the error surface are one solution unless the ridge between them rises at least this
+ * far above the higher dip, dB². Keeps a long flat valley (a big triangle) from splitting in two.
+ */
+const BASIN_DB2 = 0.25;
+/** The grid never gets finer than this many cells across, so a 200 ft triangle stays fast. */
+const MAX_CELLS = 400;
 
 /** One node's reading of a call: peak_level as on the wire, tenths of a dB. */
 export interface VenueReading {
@@ -115,45 +120,97 @@ export interface Fix extends MapPoint {
  * score the leftover squared error. The best point is the estimate; every point within `slackDb2` of
  * it forms the uncertainty area, reported as the radius of a circle with the same area.
  *
+ * Three readings often fit two separate spots about equally well: the real one and a "mirror" spot
+ * farther from every node, which needs a louder caller. So the error surface is first split into its
+ * separate solutions (basins around each dip), and only then is the tie broken: of the solutions that
+ * fit about as well as the best, the one needing the quietest caller wins, and the runner-up is
+ * reported as `alt` so the UI can say it can't tell them apart.
+ *
  * Needs no clock sync: only peak levels, which the firmware already sends.
  */
 export function trilaterate(layout: VenueLayout, readings: VenueReading[], step = 0.05, slackDb2 = 3): Fix {
   const levels = readings.map((r) => r.peak / 10);
   const nodes = readings.map((r) => layout.nodes[r.node]);
-  const grid: { x: number; y: number; err: number; l0: number }[] = [];
+  step = Math.max(step, Math.max(layout.width, layout.height) / MAX_CELLS);
+  const nx = Math.floor(layout.width / step) + 1;
+  const ny = Math.floor(layout.height / step) + 1;
+  const err = new Float64Array(nx * ny);
+  const l0s = new Float64Array(nx * ny);
+  const at = (k: number): MapPoint => ({ x: (k % nx) * step, y: Math.floor(k / nx) * step });
   let minErr = Infinity;
-  for (let x = 0; x <= layout.width; x += step) {
-    for (let y = 0; y <= layout.height; y += step) {
-      const loss = nodes.map((n) => spread(dist(n, { x, y })));
-      const l0 = levels.reduce((s, v, i) => s + v + loss[i], 0) / levels.length;
-      const err = levels.reduce((s, v, i) => s + (v - (l0 - loss[i])) ** 2, 0);
-      grid.push({ x, y, err, l0 });
-      minErr = Math.min(minErr, err);
-    }
+  for (let k = 0; k < nx * ny; k++) {
+    const p = at(k);
+    const loss = nodes.map((n) => spread(dist(n, p)));
+    const l0 = levels.reduce((s, v, i) => s + v + loss[i], 0) / levels.length;
+    err[k] = levels.reduce((s, v, i) => s + (v - (l0 - loss[i])) ** 2, 0);
+    l0s[k] = l0;
+    minErr = Math.min(minErr, err[k]);
   }
-  // Three readings usually fit two spots equally well: the real one and a "mirror" spot farther from
-  // every node, which would need a louder caller. Of the near-equal fits, the quietest caller picks
-  // the lobe; the estimate is the best fit within that lobe.
-  const good = grid.filter((g) => g.err <= minErr + TIE_DB2);
-  const seed = good.reduce((a, g) => (g.l0 < a.l0 ? g : a));
-  const inLobe = (g: MapPoint, c: MapPoint) => dist(g, c) <= LOBE_M;
-  const best = grid.filter((g) => inLobe(g, seed)).reduce((a, g) => (g.err < a.err ? g : a));
-  // The other lobe, if it fits about as well: then the readings can't tell the two spots apart.
-  const others = good.filter((g) => dist(g, best) > 2 * LOBE_M);
-  const alt = others.length ? others.reduce((a, g) => (g.err < a.err ? g : a)) : null;
-  // Uncertainty: spots in this lobe that fit nearly as well, as a circle of the same area.
-  const within = grid.filter(
-    (g) => g.err <= best.err + slackDb2 && (!alt || dist(g, best) < dist(g, alt)),
-  ).length;
+  const neighbours = (k: number) => {
+    const x = k % nx;
+    const y = Math.floor(k / nx);
+    const out: number[] = [];
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++)
+        if ((dx || dy) && x + dx >= 0 && x + dx < nx && y + dy >= 0 && y + dy < ny)
+          out.push(k + dy * nx + dx);
+    return out;
+  };
+
+  // 1. The dips: grid cells no worse than any neighbour, and within the tie of the best fit.
+  const dips: number[] = [];
+  for (let k = 0; k < nx * ny; k++) {
+    if (err[k] <= minErr + TIE_DB2 && neighbours(k).every((j) => err[k] <= err[j])) dips.push(k);
+  }
+  dips.sort((a, b) => err[a] - err[b]);
+
+  // 2. Group dips into basins: flood out from each dip (best first) up to BASIN_DB2 above it. A dip
+  // already reached by an earlier flood, or whose flood reaches an earlier basin, belongs to it.
+  const basinOf = new Int32Array(nx * ny).fill(-1);
+  const basins: number[] = []; // best cell of each basin
+  for (const d of dips) {
+    if (basinOf[d] >= 0) continue;
+    const level = err[d] + BASIN_DB2;
+    const seen = new Set([d]);
+    const queue = [d];
+    let joins = -1;
+    for (let q = 0; q < queue.length && joins < 0; q++) {
+      for (const j of neighbours(queue[q])) {
+        if (seen.has(j) || err[j] > level) continue;
+        if (basinOf[j] >= 0) {
+          joins = basinOf[j];
+          break;
+        }
+        seen.add(j);
+        queue.push(j);
+      }
+    }
+    const id = joins >= 0 ? joins : basins.push(d) - 1;
+    for (const j of seen) basinOf[j] = id;
+  }
+
+  // 3. Break the tie between basins: the quietest caller wins; the best of the rest is the alternative.
+  const bestK = basins.reduce((a, k) => (l0s[k] < l0s[a] ? k : a));
+  const rest = basins.filter((k) => k !== bestK);
+  const altK = rest.length ? rest.reduce((a, k) => (err[k] < err[a] ? k : a)) : -1;
+  const best = at(bestK);
+  const alt = altK >= 0 ? at(altK) : null;
+
+  // Uncertainty: spots on the estimate's side that fit nearly as well, as a circle of the same area.
+  let within = 0;
+  for (let k = 0; k < nx * ny; k++) {
+    if (err[k] > err[bestK] + slackDb2) continue;
+    const p = at(k);
+    if (!alt || dist(p, best) < dist(p, alt)) within++;
+  }
   const r = Math.max(0.15, Math.sqrt((within * step * step) / Math.PI));
   return {
-    x: best.x,
-    y: best.y,
+    ...best,
     r,
-    l0: best.l0,
-    err: best.err,
-    predicted: nodes.map((n) => best.l0 - spread(dist(n, best))),
-    alt: alt && { x: alt.x, y: alt.y },
+    l0: l0s[bestK],
+    err: err[bestK],
+    predicted: nodes.map((n) => l0s[bestK] - spread(dist(n, best))),
+    alt,
   };
 }
 

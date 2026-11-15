@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { callTimeline } from '@/lib/draw/venue';
-import { hex4, hms, now, prefersReducedMotion } from '@/lib/format';
+import { hex4, hms, now } from '@/lib/format';
 import { dist, toFt } from '@/lib/venue';
 import { useVenue, type VenueCall } from '@/lib/venueStore';
 
@@ -15,9 +15,7 @@ function useRevealed(call: VenueCall | undefined) {
   const [revealedId, setRevealedId] = useState<number | null>(null);
   useEffect(() => {
     if (!call) return;
-    const wait = prefersReducedMotion()
-      ? 0
-      : Math.max(0, callTimeline(layout, call).fixAt - (now() - call.t0));
+    const wait = Math.max(0, callTimeline(layout, call).fixAt - (now() - call.t0));
     const id = setTimeout(() => setRevealedId(call.id), wait * 1000);
     return () => clearTimeout(id);
   }, [call, layout]);
@@ -63,8 +61,8 @@ export function ResultCard() {
       {revealed && call.fix.alt && (
         <p className="venue-note" id="venue-ambiguous">
           The readings fit a second spot about as well ({ft(call.fix.alt.x)}, {ft(call.fix.alt.y)}), marked
-          “or here?” on the map. With three nodes this happens near an edge or outside the triangle; a fourth
-          node would settle it.
+          “or here?” on the map. With three nodes this happens near an edge or a node; a fourth node would
+          settle it.
         </p>
       )}
       <dl className="venue-stats">

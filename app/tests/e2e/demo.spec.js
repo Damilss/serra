@@ -36,11 +36,11 @@ test('a call at the centre mark is located within a few feet', async ({ page }) 
   await expect(page.locator('#venue-log li')).toHaveCount(1);
 });
 
-test('every mark inside the triangle is located within 3 ft, without noise', async ({ page }) => {
+test('every taped mark is located within 3 ft, without noise', async ({ page }) => {
   await page.getByLabel('Measurement noise').selectOption('0');
   const offs = await page.evaluate(async () => {
     const results = [];
-    for (const label of ['X1', 'X2', 'X3']) {
+    for (const label of ['X1', 'X2', 'X3', 'X4']) {
       document.querySelector(`[data-mark="${label}"]`).click();
       await new Promise((r) => setTimeout(r, 50));
       const c = window.serraVenue.calls[0];
@@ -51,11 +51,22 @@ test('every mark inside the triangle is located within 3 ft, without noise', asy
   for (const m of offs) expect(m / FT).toBeLessThan(3);
 });
 
-test('a call outside the triangle is flagged as two possible spots', async ({ page }) => {
+test('a call on the B–C edge is flagged as two possible spots', async ({ page }) => {
   await page.getByLabel('Measurement noise').selectOption('0');
-  await page.locator('[data-mark="X4"]').click();
+  await page.locator('[data-mark="X3"]').click();
   await expect(page.locator('#venue-result')).toContainText('Two possible spots', { timeout: 5_000 });
   await expect(page.locator('#venue-ambiguous')).toBeVisible();
+});
+
+test('a 200 ft triangle locates its centre without a false second spot', async ({ page }) => {
+  await page.getByLabel('Measurement noise').selectOption('0');
+  await page.getByLabel('Triangle side (ft)').fill('200');
+  await page.getByRole('button', { name: 'Apply' }).click();
+  await page.locator('[data-mark="X1"]').click();
+  await expect(page.locator('#venue-result')).toContainText('Call located', { timeout: 15_000 });
+  const c = await page.evaluate(() => window.serraVenue.calls[0]);
+  expect(Math.hypot(c.truth.x - c.fix.x, c.truth.y - c.fix.y) / FT).toBeLessThan(3);
+  expect(c.fix.alt).toBeNull();
 });
 
 test('clicking the floor simulates a call there', async ({ page }) => {

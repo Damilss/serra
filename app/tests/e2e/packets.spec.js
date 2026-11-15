@@ -49,6 +49,24 @@ test('ALERT bytes match the wire format', async ({ page }) => {
   expect(pl).toBe(9);
 });
 
+test('blast_count is 3 for a whistle and 0 for a scream or help call', async ({ page }) => {
+  const counts = await page.evaluate(() =>
+    ['whistle', 'scream', 'help'].map((cls) => {
+      const p = window.serraMock.buildPacket(1, {
+        kind: 'alert',
+        msgId: 1,
+        hops: 1,
+        conf: 0.5,
+        peak: 800,
+        uptime: 1000,
+        cls,
+      });
+      return p.fields.find((f) => f.name === 'blast_count').bytes;
+    }),
+  );
+  expect(counts).toEqual([[3], [0], [0]]);
+});
+
 test('clicking Resume live goes back to following new packets', async ({ page }) => {
   await page.locator('#pklog li').nth(2).click();
   await expect(page.locator('#pk-live')).toHaveText('Resume live');

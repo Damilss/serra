@@ -10,6 +10,7 @@ import { useEffect } from 'react';
 import { CALL_DB, TRIGGER_DB, levelAt } from '@/lib/sound';
 import { lat, lon, NODES } from '@/lib/geo';
 import { makeAlert, summary } from '@/lib/alerts';
+import { buildPacket } from '@/lib/packets';
 import { useDashboard } from '@/lib/store';
 import { AlertCard } from './AlertCard';
 import { Feed } from './Feed';
@@ -79,6 +80,7 @@ export function Dashboard() {
         TRIGGER_DB,
         CALL_DB,
         levelAt,
+        buildPacket,
       }),
     });
 

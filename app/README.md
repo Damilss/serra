@@ -82,7 +82,7 @@ On the field dashboard:
 
 The spot with the lowest score is the estimate. The spots that score nearly as well become the search circle. It needs no clock sync, only the peak levels the firmware already sends.
 
-**Two possible spots.** Three loudness readings usually fit two places: the real one, and a "mirror" spot farther from every node, which would need a louder caller. The solver picks the spot that needs the quieter caller. If the mirror spot fits about as well, it says so ("Two possible spots") and marks it "or here?" on the map. That happens near an edge or outside the triangle. A fourth node would settle it.
+**Two possible spots.** Three loudness readings usually fit two places: the real one, and a "mirror" spot farther from every node, which would need a louder caller. The solver first finds each separate spot the readings fit, then picks the one that needs the quieter caller. If another spot fits about as well, it says so ("Two possible spots") and marks it "or here?" on the map. That happens near an edge or a node of the triangle. A fourth node would settle it.
 
 **Expected accuracy (simulated, 20 ft triangle):**
 
@@ -90,9 +90,9 @@ The spot with the lowest score is the estimate. The spots that score nearly as w
 | ---------------------------------------- | ---------------------------------- |
 | None                                     | under 0.2 ft                       |
 | ±1 dB, a calibrated node in a quiet room | about 1 ft                         |
-| ±2 dB                                    | about 2–3 ft                       |
+| ±2 dB                                    | about 2 ft                         |
 
-Outside the triangle, expect several feet of error.
+Error grows with the triangle: at 200 ft per side, ±1 dB gives about 9 ft.
 
 **Using it**
 
@@ -226,8 +226,6 @@ There are three layers:
 
 **Fonts** are Instrument Sans and JetBrains Mono, bundled from npm (`@fontsource-variable/*`) and imported in `layout.tsx`. Canvas text uses them by name (`lib/brand.ts`).
 
-**Reduced motion:** with `prefers-reduced-motion`, animations jump to their end state and the loading screen is skipped.
-
 ## Common tasks
 
 **Add a shadcn/ui component**
@@ -289,7 +287,7 @@ Mock today:
 
 - the welcome and loading screens;
 - the venue demo: the Field / Venue demo tabs, the triangle's size, and the accuracy at each taped mark;
-- that a call outside the triangle gets flagged as two possible spots;
+- that a call on the B–C edge gets flagged as two possible spots, and a 200 ft triangle locates its centre;
 - the node picker, simulating, acknowledging and resolving alerts, and replay;
 - the packet view's bytes against the firmware's wire format;
 - the sound model (dB levels, falloff, the wake trigger);

@@ -20,12 +20,4 @@ test.describe('welcome screen', () => {
     await expect(page).toHaveURL(/\/dashboard$/);
     await expect(loader).toBeHidden({ timeout: 2_000 });
   });
-
-  test('skips the loading screen when the user prefers reduced motion', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto('/');
-    await page.locator('#enter').click();
-    await expect(page.locator('#dashboard')).toBeVisible();
-    await expect(page.locator('#loader')).toBeHidden();
-  });
 });
