@@ -12,9 +12,14 @@
 #
 # Safe to re-run: it re-syncs, re-renders the unit and restarts the service.
 #
+# --uninstall stops and disables the service and removes the unit. It keeps
+# captures/ (recordings), .venv and your bluetooth group membership, so a later
+# install picks up where this left off. Also safe to re-run.
+#
 # Usage:
 #   sudo deploy/setup-pi.sh
-#   sudo DRY_RUN=1 deploy/setup-pi.sh    # print what would run, change nothing
+#   sudo deploy/setup-pi.sh --uninstall
+#   sudo DRY_RUN=1 deploy/setup-pi.sh [--uninstall]    # print what would run, change nothing
 
 set -euo pipefail
 
@@ -37,9 +42,41 @@ run() {
 	fi
 }
 
-[[ "$(id -u)" == 0 ]] || die "run with sudo: sudo $0"
+# Stop and disable the service and remove its unit; leave everything else.
+uninstall() {
+	if [[ ! -f "$UNIT_DST" ]]; then
+		notice "$UNIT is not installed; nothing to do"
+		return
+	fi
+	run systemctl disable --now "$UNIT"
+	run rm -f "$UNIT_DST"
+	run systemctl daemon-reload
+	notice "removed $UNIT. Kept captures/, .venv and the bluetooth group."
+	echo "  reinstall:                 sudo $0"
+	echo "  leave the bluetooth group: sudo gpasswd -d ${SUDO_USER:-<user>} bluetooth"
+}
+
+USAGE="usage: sudo $0 [--uninstall]"
+ACTION=install
+[[ $# -le 1 ]] || die "$USAGE"
+case "${1:-}" in
+"") ;;
+--uninstall) ACTION=uninstall ;;
+-h | --help)
+	echo "$USAGE"
+	exit 0
+	;;
+*) die "unknown option: $1 ($USAGE)" ;;
+esac
+
+[[ "$(id -u)" == 0 ]] || die "run with sudo: sudo $0${1:+ $1}"
 [[ "$(uname -s)" == Linux ]] || die "this sets up the Pi (Linux with systemd); on a laptop just run: uv run serra-base"
 command -v systemctl >/dev/null 2>&1 || die "systemctl not found; this needs systemd"
+
+if [[ "$ACTION" == uninstall ]]; then
+	uninstall
+	exit 0
+fi
 
 # The service runs as the user who called sudo, from this checkout.
 SVC_USER="${SUDO_USER:-}"

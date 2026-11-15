@@ -102,7 +102,7 @@ Constants parsed from `firmware/mesh/packet.h` by the new test:
 ## What it does not show
 
 - **Live BLE and the real Bluetooth-loss path.** `ble.scan()` was only driven by a fake scanner. Nobody pulled the adapter on the Pi or switched Bluetooth off on macOS to watch `/health` go `down` and then back to `up`.
-- **`deploy/`.** `setup-pi.sh` passes `bash -n` and shellcheck, but it has never run. `serra-base.service` wasn't checked with `systemd-analyze verify` (not available on macOS). Still to check on the Pi: the `bluetooth` group and D-Bus permissions, `KillSignal=SIGINT` giving the clean exit, and start-on-boot in gadget mode.
+- **`deploy/`.** `setup-pi.sh` passes `bash -n` and shellcheck, but it has never run on a real Pi. Its `--uninstall` path and the install dry run were exercised on macOS with stand-ins for `id`, `uname`, `systemctl` and `getent`, and the unit path pointed at a temp dir. That covers the argument handling, the idempotency and the commands issued, not systemd's behavior. `serra-base.service` wasn't checked with `systemd-analyze verify` (not available on macOS). Still to check on the Pi: the `bluetooth` group and D-Bus permissions, `KillSignal=SIGINT` giving the clean exit, and start-on-boot in gadget mode.
 - **The USB link.** Everything ran on `127.0.0.1`, not `10.12.194.1` over CDC-ECM.
 - **The real ingest.** `app/` has no SSE client yet, so the alignment above is a read of the schema and the TypeScript, not a run.
 - **Long runs.** The longest run was about 4 s. The 15 s ping only ran with a shortened interval in a unit test.

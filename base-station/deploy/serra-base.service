@@ -2,6 +2,7 @@
 #
 # A template: deploy/setup-pi.sh fills in @USER@ and @BASE_DIR@ and installs the
 # result as /etc/systemd/system/serra-base.service. Don't copy it by hand.
+# `sudo deploy/setup-pi.sh --uninstall` removes it again.
 #
 # Starts on boot and restarts if it crashes. Losing Bluetooth doesn't stop it:
 # serra-base keeps serving /health (scanner "down") and retries the adapter itself.

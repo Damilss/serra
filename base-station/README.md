@@ -103,7 +103,7 @@ base-station/
 │   └── test_cli.py         # a failed source is retried without ending the run
 ├── captures/               # recorded sessions; not committed, except one small sample
 └── deploy/
-    ├── setup-pi.sh         # one-time Pi setup: uv sync, bluetooth group, installs and starts the unit
+    ├── setup-pi.sh         # one-time Pi setup: uv sync, bluetooth group, installs and starts the unit; --uninstall removes it
     └── serra-base.service  # systemd unit template: start on boot, restart on crash
 ```
 
@@ -294,6 +294,15 @@ Do this **before the event, with internet**. In gadget mode the Pi has no intern
 
 **Power:** in gadget mode the Pi 5 is powered through the same USB-C cable that carries the data, and laptop ports often can't supply enough. Raspberry Pi recommends a powered USB hub between the laptop and the Pi. On the Pi, `vcgencmd get_throttled` should print `throttled=0x0`; anything else means undervoltage or throttling.
 
+**Stopping or removing the service:**
+
+- **To run `serra-base` by hand on the Pi** (e.g. `uv run serra-base --source ble -v` while debugging), stop the service first. Otherwise the second instance can't get port 8080 and exits 2.
+  ```bash
+  sudo systemctl stop serra-base     # free port 8080; it comes back on the next boot
+  sudo systemctl start serra-base    # back to normal
+  ```
+- **To remove it** (reflashing, or using the Pi for something else): `sudo deploy/setup-pi.sh --uninstall` stops and disables the service and removes the unit. It keeps `captures/` (recordings), `.venv` and your `bluetooth` group membership (`sudo gpasswd -d <user> bluetooth` to leave the group). Running `sudo deploy/setup-pi.sh` again reinstalls it. `DRY_RUN=1` previews either one.
+
 ---
 
 ## Gotchas
@@ -330,7 +339,7 @@ uv run ruff check        # lint
 - [ ] Define the `HEARTBEAT` payload with firmware. The Supabase schema expects battery percentage and millivolts from it, and the app's packet view proposes `battery_pct` u8 then `millivolts` u16 (3 bytes). Until it's pinned, heartbeats pass through with their bytes in `raw`.
 - [x] `peak_level` units agree with the app (checked against the `app` branch): tenths of a dB everywhere, and `seed.sql` now stores 898 / 593 / 502. The schema generates `peak_db`, so the ingest writes `peak_level` only.
 - [ ] Test BlueZ delivery with nRF Connect (see [Gotchas](#gotchas)).
-- [ ] Check the Pi 5's power over the laptop's USB-C, with and without a powered hub.
+- [x] Check the Pi 5's power over the laptop's USB-C, with and without a powered hub.
 - [x] Update the root README and CONTRIBUTING: the dashboard runs on the laptop, and the laptop pulls events from the Pi over USB.
 - [ ] Run the service on the Pi: `sudo deploy/setup-pi.sh`, a reboot, then `curl http://10.12.194.1:8080/health` from the laptop.
 - [ ] `app` branch: the migration header and `app/supabase/README.md` still say the Pi's BLE listener writes Supabase with the `service_role` key. The laptop's ingest pulls `/events` instead.
