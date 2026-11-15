@@ -431,6 +431,7 @@ serra/
 ├── serra_brand/         # Serra brand kit: logos (SVG/PNG), brand PDF, colors, type
 ├── base-station/            # Pi 5: BLE listener + dashboard
 ├── scripts/
+│   ├── install-app-tooling.sh       # Node, npm packages, Playwright, gitleaks, Docker (macOS, apt Linux)
 │   ├── install-firmware-tooling.sh  # toolchain + Pico SDK setup (macOS, apt Linux)
 │   └── pico_setup.sh        # Raspberry Pi's full SDK/OpenOCD setup on the Pi 5
 ├── docs/
