@@ -27,13 +27,16 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 | SDK images on hardware (build info, timers, USB stdio) | Done |
 | SDK smoke test: `picow_blink` (onboard LED through the CYW43) | Builds; **not yet run on a Pico 2 W** |
 | SDK smoke test: `ble_temp_server` (BLE advertising) | Builds; **not yet run on a Pico 2 W** |
-| INMP441 mic hardware | Headers soldered, ready to wire (pins proposed in [`docs/classifier-interface.md`](../docs/classifier-interface.md#1-microphone-inmp441)); **not yet read by firmware** |
+| INMP441 mic hardware | **Working on 3 × Pico 2 W (2026-11-14)**, wired per [`docs/classifier-interface.md`](../docs/classifier-interface.md#1-microphone-inmp441). One module ignores WS and sends its raw one-bit stream; `mic.c` detects that at boot and filters it to normal samples. Another had a loose connection. See the [mic report](../docs/reports/firmware/2026-11-14-mic-classifier-nodes.md) |
 | BLE advertise test with our packet format | **Works on 2 × Pico 2 W (2026-11-14)**: each board advertises a test alert every second and the other decodes it over the air (`[mesh] rx src=...` on serial) |
 | Our firmware (`node.uf2`): `main.c` + `blink_light` + `mesh/` | **Runs on a Pico 2 W**: LED toggles every 1000 ms. All core 0 work runs as `async_context` workers on the cyw43 context; `main.c` loops on `cyw43_arch_poll()` + `cyw43_arch_wait_for_work_until()`. Ported off our own scheduler 2026-11-14 and re-tested on hardware: LED, BLE and mesh tx/rx all work |
 | BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Used by `mesh/ble.c`: non-connectable advertising + passive scan, filtered on company ID `0xFFFF` and `MESH_MAGIC` |
-| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, logs received packets. **No dedup or relaying yet**; `main.c` runs a temporary 1 s test beacon |
+| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, drops duplicate `(src, msg_id)` pairs, shares the advertising slot through `mesh/tx_queue.c` (alerts expire after 5 s) and relays new packets with `ttl - 1` (PR #6). `mesh/console.c` is a serial test console (`h` for help): `a` sends one test alert on demand, `b <tag>` / `u` block and unblock a neighbor's radio to force hops on a desk. Nothing is sent automatically; alerts come from the classifier |
 | `classifier/` (`serra_classifier`: microfrontend features + int8 model on TensorFlow Lite Micro) + `tools/classifier_bench` | **Runs on a Pico 2 W**: 70.6 ms per inference, 42.9 KB of a 48 KB arena, ~215 KB flash ([measurements](../docs/classifier-interface.md)). Needs a `pico-tflmicro` checkout ([Prerequisites](#prerequisites)). **Not yet linked into `node.uf2`** |
-| `runtime/ipc`, `runtime/node_state`, `audio/audio.c` | Empty placeholders |
+| Mic + classifier on the node: `audio/listen.c` (core 1) + `runtime/ipc` (core 1 → core 0) | **Works on 3 × Pico 2 W (2026-11-14)**: each node detects whistle / scream / "help", hands the detection to core 0 and broadcasts it; the other nodes decode it. Mic driver, features, model and TFLM wrapper from PR #5. [Report](../docs/reports/firmware/2026-11-14-mic-classifier-nodes.md) |
+| Peak-level calibration: `calib_table` in `audio/listen.c`, keyed by node ID | **Measured for the 3 demo nodes (2026-11-14)** with a 1 kHz phone tone, good to about ±3 dB ([report](../docs/reports/firmware/2026-11-14-calibration.md)). Re-measure in the demo room if time allows. Build with `-DSERRA_LISTEN_DEBUG=ON` for the level readout |
+| Combined build: mic + classifier + calibration + dedup + tx queue + relaying | **Runs on 3 × Pico 2 W (2026-11-14)**: test alerts arrive once per node and are relayed once ([report](../docs/reports/firmware/2026-11-14-combined-build.md)). Not yet checked in this build: a real detection through the mesh, a two-hop real detection, the calibrated location check |
+| `runtime/node_state`, `audio/audio.c` | Empty placeholders |
 
 ---
 
@@ -42,12 +45,12 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 ```
 firmware/
 ├── CMakeLists.txt     # SDK build for PICO_BOARD=pico2_w
-├── btstack_config.h   # (planned) BTstack options; the pico_btstack_* libraries require it
-├── main.c             # application entry
-├── runtime/           # inter-core handoff (ipc), node state; power management planned
-├── audio/             # mic capture, wake trigger (planned)
+├── btstack_config.h   # BTstack options (BLE only); the pico_btstack_* libraries require it
+├── main.c             # core 0: radio, mesh, workers, then starts core 1
+├── runtime/           # ipc: core 1 -> core 0 detections; node state and power management planned
+├── audio/             # mic.c + i2s_mic.pio (INMP441 over PIO/DMA; detects a mic that sends a raw bitstream); listen.c: core 1 mic + classifier loop
 ├── classifier/        # features + int8 model on TFLM (classifier.cmake); vendored C in third_party/
-├── mesh/              # BLE flooding (planned)
+├── mesh/              # packet.h (wire format), ble.c (advertise/scan), mesh.c (send/receive)
 ├── tools/
 │   ├── classifier_bench/  # classifier on the board: arena, timing, test scores, live mic (needs pico-tflmicro)
 │   └── mic_capture/       # streams the mic over USB serial for model/record.py
@@ -65,7 +68,7 @@ firmware/
 | Pico SDK **2.3.1**, with submodules | startup, drivers, `cyw43-driver`, `btstack`, `tinyusb`, `lwip`, `mbedtls` |
 | `picotool` ≥ 2.0 | loads images over USB; 1.x doesn't support the RP2350. The SDK build also uses it to make `.uf2` files |
 | host C/C++ compiler, `python3` | the SDK builds `pioasm` for your machine and generates BTstack GATT headers during the build (Xcode command line tools on macOS) |
-| [`pico-tflmicro`](https://github.com/raspberrypi/pico-tflmicro) at commit **`dfea53b`** | TensorFlow Lite Micro with CMSIS-NN kernels, for anything that links the classifier (`classifier_bench`, later the node firmware). Raspberry Pi's port; Apache 2.0. Not vendored ([design decision 12](../README.md#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)) |
+| [`pico-tflmicro`](https://github.com/raspberrypi/pico-tflmicro) at commit **`dfea53b`** | TensorFlow Lite Micro with CMSIS-NN kernels, for anything that links the classifier (the node firmware, `classifier_bench`). Raspberry Pi's port; Apache 2.0. Not vendored ([design decision 12](../README.md#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)) |
 
 The script installs all of them (Homebrew on macOS, apt on Linux). It's safe to re-run:
 
@@ -73,6 +76,8 @@ The script installs all of them (Homebrew on macOS, apt on Linux). It's safe to 
 scripts/install-firmware-tooling.sh          # from the repo root; DRY_RUN=1 to preview
 export PICO_SDK_PATH="$HOME/pico/pico-sdk"   # add to ~/.bashrc or ~/.zshrc
 ```
+
+The first node build compiles all of TFLM and takes a couple of minutes; later builds are incremental.
 
 Check the SDK:
 
@@ -165,12 +170,18 @@ picotool load -f -x firmware/tools/classifier_bench/build/classifier_bench.uf2
 - **One SDK version.** pico-examples tracks the SDK, so mismatched versions can fail to build. Keep pico-examples on the matching `sdk-<version>` tag.
 - **`pico-tflmicro not found at ...`** at configure means there's no checkout where `classifier.cmake` looks (it checks for `src/tensorflow/lite/micro/micro_interpreter.h`). Run `scripts/install-firmware-tooling.sh`, or point `PICO_TFLMICRO_PATH` at your checkout. The path is cached, so after fixing it delete the build directory (or pass `-DPICO_TFLMICRO_PATH=...`) and configure again.
 - **Stay on `pico-tflmicro` `dfea53b`.** It's the commit the classifier was built and measured on. `classifier.cmake` globs its sources and carries two workarounds for it under GCC 15 (`-include cstdint`, `ARDUINO=1`), so another commit may not build or may give different numbers.
+- **Mic VDD goes on pin 36, 3V3(OUT).** Pin 37 next to it is 3V3_EN, the regulator's enable input: a mic there gets no real power and can reset the board. Pins 39 (VSYS) and 40 (VBUS) are ~5 V, above the INMP441's 3.63 V maximum.
+- **A silent mic is usually a connection, or a bitstream module.** If a node prints `[listen] mic + classifier running on core 1` but never detects anything, swap mic modules with a working node: if the fault moves, it's the module or its wires (reflow the header joints, try other dupont wires). L/R must be tied to GND, and WS must be on GP4, right after SCK on GP3.
+- **The classifier reports an event when it ends,** about 1.5 s after the sound stops, so a detection line appears after you've finished whistling, not during.
 
 ---
 
 ## Next steps
 
-1. **First build of our own firmware:** `CMakeLists.txt` is in place; add `btstack_config.h` and a `main.c` that advertises a `mesh_pkt_t` (see the README's [packet format](../README.md#packet-format-proposed)), checked with a phone scanner or the Pi 5.
+1. **Hardware test of the combined build** (mic + classifier + dedup + tx queue + relaying): a whistle at one node, relayed by another, received by a third.
+2. **End-to-end with the base station** (`base-station/`, PR #7): a whistle at a node, decoded on the Pi.
+3. **Location check with calibration:** per-node offsets are in `calib_table` in `audio/listen.c` (measured 2026-11-14); the node closest to a sound should report the highest `peak_level`.
+4. **Heartbeat payload:** agree it with the base station and app (the app currently proposes battery and millivolts).
 
 ---
 

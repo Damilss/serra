@@ -1,0 +1,19 @@
+# gitleaks config for the whole Serra repository (used by app/.husky hooks and `npm run secrets`).
+# Starts from gitleaks' built-in rules (API keys, tokens, private keys, ...).
+#
+# If gitleaks flags something that really isn't a secret, prefer an inline
+# `gitleaks:allow` comment on that line over widening this file.
+
+title = "Serra"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated and vendored files"
+paths = [
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)uv\.lock$''',
+  '''^docs/refs/''',
+  '''^serra_brand/logos/''',
+]

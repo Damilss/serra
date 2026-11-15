@@ -6,7 +6,6 @@
  */
 #include "console.h"
 
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -25,23 +24,16 @@
  */
 #define CONSOLE_LINE_MAX 32
 
-/**
- * TEST_BEACON_PERIOD_MS - how often the test beacon sends a fake alert
- *
- * 5 s = about one of our own alerts in the queue at a time, which leaves
- * room for relaying other nodes' alerts in the 8-slot queue.
- */
-#define TEST_BEACON_PERIOD_MS 5000
-
 static char line[CONSOLE_LINE_MAX];
 static int line_len;
-static bool beacon_on = true;
 
 /**
- * send_test_alert - send one fake whistle alert
- * @why: label for the log line, "beacon" or "manual"
+ * send_test_alert - send one fake whistle alert, on the "a" command
+ *
+ * for testing the radio and relay path without making a sound, and as a
+ * fallback if a node's mic fails during a demo.
  */
-static void send_test_alert(const char *why) {
+static void send_test_alert(void) {
 	alert_payload_t alert = {
 		.class_id = CLASS_WHISTLE,
 		.confidence = 200,
@@ -51,29 +43,18 @@ static void send_test_alert(const char *why) {
 	};
 
 	if (mesh_send_alert(&alert) == 0)
-		printf("[test] %s alert queued, node 0x%04x ts=%lu\n", why, mesh_node_id(),
+		printf("[test] test alert queued, node 0x%04x ts=%lu\n", mesh_node_id(),
 			   (unsigned long)alert.timestamp);
 	else
-		printf("[test] %s alert rejected by the queue\n", why);
-}
-
-/**
- * beacon_tick - at-time worker: send a test alert unless paused, repeat
- * @context: the cyw43 async_context the worker runs on
- * @worker: this worker; re-added every TEST_BEACON_PERIOD_MS
- */
-static void beacon_tick(async_context_t *context, async_at_time_worker_t *worker) {
-	if (beacon_on)
-		send_test_alert("beacon");
-	async_context_add_at_time_worker_in_ms(context, worker, TEST_BEACON_PERIOD_MS);
+		printf("[test] test alert rejected by the queue\n");
 }
 
 /**
  * print_help - list the console commands
  */
 static void print_help(void) {
-	printf("commands: a = send alert | b <tag> = block radio | u = unblock all |\n"
-		   "          p = pause/resume beacon | s = status | h = help\n");
+	printf("commands: a = send test alert | b <tag> = block radio | u = unblock all |\n"
+		   "          s = status | h = help\n");
 }
 
 /**
@@ -88,7 +69,7 @@ static void run_command(const char *cmd) {
 	case '\0':
 		return;
 	case 'a':
-		send_test_alert("manual");
+		send_test_alert();
 		return;
 	case 'b':
 		tag = strtoul(cmd + 1, &end, 16);
@@ -104,13 +85,8 @@ static void run_command(const char *cmd) {
 		mesh_unblock_all();
 		mesh_print_status();
 		return;
-	case 'p':
-		beacon_on = !beacon_on;
-		printf("[test] beacon %s\n", beacon_on ? "on" : "paused");
-		return;
 	case 's':
 		mesh_print_status();
-		printf("[test] beacon %s\n", beacon_on ? "on" : "paused");
 		return;
 	default:
 		print_help();
@@ -159,20 +135,14 @@ static async_at_time_worker_t console_worker = {
 	.do_work = console_tick,
 };
 
-static async_at_time_worker_t beacon_worker = {
-	.do_work = beacon_tick,
-};
-
 /**
- * console_init - start the serial console and the test beacon as workers
+ * console_init - start the serial console as a worker
  *
- * return: 0 on success, -1 if the async_context rejected a worker.
+ * return: 0 on success, -1 if the async_context rejected the worker.
  */
 int console_init(void) {
-	async_context_t *context = cyw43_arch_async_context();
-
-	if (!async_context_add_at_time_worker_in_ms(context, &console_worker, CONSOLE_POLL_MS) ||
-		!async_context_add_at_time_worker_in_ms(context, &beacon_worker, TEST_BEACON_PERIOD_MS))
+	if (!async_context_add_at_time_worker_in_ms(cyw43_arch_async_context(), &console_worker,
+												CONSOLE_POLL_MS))
 		return -1;
 	print_help();
 	return 0;

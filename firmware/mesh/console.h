@@ -4,15 +4,15 @@
  * date: 2026-11-14
  * file: console.h
  *
- * runs on core 0. TEMPORARY test tools for the mesh: a serial command line
- * (type into PuTTY) and a test beacon that sends fake alerts until real
- * ones come from the classifier.
+ * runs on core 0. test tools for the mesh: a serial command line (type
+ * into PuTTY or screen). nothing is sent unless someone types a command;
+ * real alerts come from the classifier on core 1.
  *
  * commands (Enter to run):
- *   a          send one test alert now
+ *   a          send one test alert now (a fake whistle; the base station
+ *              and dashboard show it like a real one)
  *   b <tag>    block a neighbor radio, e.g. "b 4a9e" (tag from its boot log)
  *   u          unblock all
- *   p          pause / resume the test beacon
  *   s          status: node ID, counters, block list
  *   h          help
  */
@@ -20,7 +20,7 @@
 #define MESH_CONSOLE_H
 
 /**
- * console_init - start the serial console and the test beacon
+ * console_init - start the serial console
  *
  * call after mesh_init().
  *

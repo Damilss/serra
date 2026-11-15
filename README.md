@@ -318,7 +318,7 @@ static_assert(sizeof(alert_payload_t) == 9, "alert payload is 9 bytes");
 
 `peak_level` is the loudest moment of the detected sound, in dB. On the node it's computed as dBFS (`20·log10(peak / full_scale)`, always ≤ 0) plus a per-node calibration offset, then sent in tenths of a dB. The offset is chosen so the reference tone reads the same agreed value on every node (e.g. 80.0 dB), which is why sent values are positive.
 
-**Calibrate once, in the demo room:** put each node at the same distance from a phone playing a steady reference tone at a fixed volume, read the node's dBFS, and store the offset that brings all nodes to the same value (in flash, or a `#define` per board for the demo). The INMP441's sensitivity is specified to ±1 dB, so this mostly evens out placement, enclosures and wiring rather than mic-to-mic variation. Absolute dB SPL isn't needed; nodes only have to agree with each other.
+**Calibrate once, in the demo room:** put each node at the same distance from a phone playing a steady reference tone at a fixed volume, read the node's dBFS, and store the offset that brings all nodes to the same value. The firmware keeps these offsets in a table keyed by node ID (`calib_table` in `firmware/audio/listen.c`); node IDs come from each chip's factory-burned unique ID, so one build serves every board. The demo nodes were measured on 2026-11-14 ([report](docs/reports/firmware/2026-11-14-calibration.md)). The INMP441's sensitivity is specified to ±1 dB, so this mostly evens out placement, enclosures and wiring rather than mic-to-mic variation. Absolute dB SPL isn't needed; nodes only have to agree with each other.
 
 ### Message types (proposed)
 
@@ -334,7 +334,7 @@ Our "OS" is a small runtime sitting on top of the Pico SDK. The SDK provides dri
 **SDK building blocks:**
 - **Radio and BLE:** `pico_cyw43_arch_poll` + `pico_btstack_ble` + `pico_btstack_cyw43` (as in `firmware/CMakeLists.txt`). Radio and BTstack work happens when core 0's main loop calls `cyw43_arch_poll()`; under the hood that's the SDK's `async_context` in poll mode.
 - **Scheduling:** the cyw43 `async_context` (`cyw43_arch_async_context()`) runs all core 0 work: BTstack, the radio driver and our own workers. Timed work (LED, tx queue, heartbeat) is an at-time worker (`async_context_add_at_time_worker_in_ms()`) that re-adds itself to repeat; work triggered by an event, such as a detection arriving from core 1, is a when-pending worker (`async_context_set_work_pending()`). `main.c`'s loop is just `cyw43_arch_poll()` then `cyw43_arch_wait_for_work_until()`, which sleeps until the next worker is due or the radio has work.
-- **Dual core:** `pico_multicore`. Core 0 runs the radio and mesh; core 1 runs audio, the wake trigger and the classifier. They pass detections over the SDK's inter-core FIFO or a `queue_t`.
+- **Dual core:** `pico_multicore`. Core 0 runs the radio and mesh; core 1 runs audio, the wake trigger and the classifier. Core 1 hands each detection to core 0 through a `queue_t` and wakes a when-pending worker on core 0's `async_context`, which sends it over the mesh (`firmware/runtime/ipc.c`). Core 1 never touches the radio.
 - **Audio input:** a PIO I2S program plus DMA streams INMP441 samples into a ring buffer, so the CPU only wakes when a block is ready.
 - **Idling:** cores wait on interrupts (`__wfi()` / the SDK's blocking waits) instead of busy-waiting.
 
@@ -472,7 +472,8 @@ serra/
 ├── base-station/            # Pi 5: BLE listener, decoder, dedup -> writes to Supabase
 ├── app/                     # laptop: Supabase + map dashboard, optional Ollama LLM
 ├── scripts/
-│   ├── install-firmware-tooling.sh  # toolchain + Pico SDK + pico-tflmicro setup (macOS, apt Linux)
+│   ├── install-app-tooling.sh       # Node, npm packages, Playwright, gitleaks, Docker (macOS, apt Linux)
+│   ├── install-firmware-tooling.sh  # toolchain + Pico SDK setup (macOS, apt Linux)
 │   └── pico_setup.sh        # Raspberry Pi's full SDK/OpenOCD setup on the Pi 5
 ├── docs/
 │   ├── classifier-interface.md  # model -> firmware handoff: mic, runtime, C API, budgets
