@@ -22,3 +22,10 @@ model/data/*
 !model/data/.gitkeep
 !model/data/README.md
 model/out/
+
+# base station captures (see base-station/README.md)
+base-station/captures/*
+!base-station/captures/.gitkeep
+!base-station/captures/sample.ndjson
+# vscode: per-machine settings (extensions.json stays shared)
+.vscode/settings.json

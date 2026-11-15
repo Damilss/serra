@@ -12,9 +12,10 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 2. [Layout](#layout)
 3. [Prerequisites](#prerequisites)
 4. [Smoke test](#smoke-test)
-5. [Gotchas](#gotchas)
-6. [Next steps](#next-steps)
-7. [References](#references)
+5. [Tools](#tools)
+6. [Gotchas](#gotchas)
+7. [Next steps](#next-steps)
+8. [References](#references)
 
 ---
 
@@ -22,12 +23,17 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 
 | Piece | State |
 |---|---|
-| Toolchain + Pico SDK 2.3.1 install (`scripts/install-firmware-tooling.sh`) | Done (macOS) |
+| Toolchain + Pico SDK 2.3.1 install (`scripts/install-firmware-tooling.sh`) | Done (macOS); builds on Linux (WSL2) too |
 | SDK images on hardware (build info, timers, USB stdio) | Done |
 | SDK smoke test: `picow_blink` (onboard LED through the CYW43) | Builds; **not yet run on a Pico 2 W** |
 | SDK smoke test: `ble_temp_server` (BLE advertising) | Builds; **not yet run on a Pico 2 W** |
-| BLE advertise test with our packet format | Not started |
-| `runtime/`, `audio/`, `classifier/`, `mesh/` | Empty placeholders |
+| INMP441 mic hardware | Headers soldered, ready to wire (pins proposed in [`docs/classifier-interface.md`](../docs/classifier-interface.md#1-microphone-inmp441)); **not yet read by firmware** |
+| BLE advertise test with our packet format | **Works on 2 × Pico 2 W (2026-11-14)**: each board advertises a test alert every second and the other decodes it over the air (`[mesh] rx src=...` on serial) |
+| Our firmware (`node.uf2`): `main.c` + `blink_light` + `mesh/` | **Runs on a Pico 2 W**: LED toggles every 1000 ms. All core 0 work runs as `async_context` workers on the cyw43 context; `main.c` loops on `cyw43_arch_poll()` + `cyw43_arch_wait_for_work_until()`. Ported off our own scheduler 2026-11-14 and re-tested on hardware: LED, BLE and mesh tx/rx all work |
+| BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Used by `mesh/ble.c`: non-connectable advertising + passive scan, filtered on company ID `0xFFFF` and `MESH_MAGIC` |
+| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, logs received packets. **No dedup or relaying yet**; `main.c` runs a temporary 1 s test beacon |
+| `classifier/` (`serra_classifier`: microfrontend features + int8 model on TensorFlow Lite Micro) + `tools/classifier_bench` | **Runs on a Pico 2 W**: 70.6 ms per inference, 42.9 KB of a 48 KB arena, ~215 KB flash ([measurements](../docs/classifier-interface.md)). Needs a `pico-tflmicro` checkout ([Prerequisites](#prerequisites)). **Not yet linked into `node.uf2`** |
+| `runtime/ipc`, `runtime/node_state`, `audio/audio.c` | Empty placeholders |
 
 ---
 
@@ -38,10 +44,13 @@ firmware/
 ├── CMakeLists.txt     # SDK build for PICO_BOARD=pico2_w
 ├── btstack_config.h   # (planned) BTstack options; the pico_btstack_* libraries require it
 ├── main.c             # application entry
-├── runtime/           # scheduler / power management (planned)
+├── runtime/           # inter-core handoff (ipc), node state; power management planned
 ├── audio/             # mic capture, wake trigger (planned)
-├── classifier/        # int8 model + inference (planned)
+├── classifier/        # features + int8 model on TFLM (classifier.cmake); vendored C in third_party/
 ├── mesh/              # BLE flooding (planned)
+├── tools/
+│   ├── classifier_bench/  # classifier on the board: arena, timing, test scores, live mic (needs pico-tflmicro)
+│   └── mic_capture/       # streams the mic over USB serial for model/record.py
 └── build/             # generated, git-ignored
 ```
 
@@ -56,6 +65,7 @@ firmware/
 | Pico SDK **2.3.1**, with submodules | startup, drivers, `cyw43-driver`, `btstack`, `tinyusb`, `lwip`, `mbedtls` |
 | `picotool` ≥ 2.0 | loads images over USB; 1.x doesn't support the RP2350. The SDK build also uses it to make `.uf2` files |
 | host C/C++ compiler, `python3` | the SDK builds `pioasm` for your machine and generates BTstack GATT headers during the build (Xcode command line tools on macOS) |
+| [`pico-tflmicro`](https://github.com/raspberrypi/pico-tflmicro) at commit **`dfea53b`** | TensorFlow Lite Micro with CMSIS-NN kernels, for anything that links the classifier (`classifier_bench`, later the node firmware). Raspberry Pi's port; Apache 2.0. Not vendored ([design decision 12](../README.md#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)) |
 
 The script installs all of them (Homebrew on macOS, apt on Linux). It's safe to re-run:
 
@@ -69,6 +79,23 @@ Check the SDK:
 ```sh
 git -C "$PICO_SDK_PATH" describe --tags      # → 2.3.1
 git -C "$PICO_SDK_PATH" submodule status     # 5 lines; a leading '-' means that submodule is empty
+```
+
+The script also clones `pico-tflmicro` at the pinned commit next to the SDK (`~/pico/pico-tflmicro`), which is where `firmware/classifier/classifier.cmake` looks by default, so no extra variable is needed. To keep it somewhere else, set the `PICO_TFLMICRO_PATH` environment variable when running the script, and the same path when building (environment variable, or `-DPICO_TFLMICRO_PATH=` at configure). An existing checkout is never changed: the script prints its commit, and if that isn't the pinned one, the commands to switch.
+
+Check it:
+
+```sh
+git -C ~/pico/pico-tflmicro rev-parse --short HEAD   # → dfea53b
+```
+
+Without the script, fetch just that commit (~16 MB checked out, no submodules):
+
+```sh
+git init ~/pico/pico-tflmicro
+git -C ~/pico/pico-tflmicro remote add origin https://github.com/raspberrypi/pico-tflmicro.git
+git -C ~/pico/pico-tflmicro fetch --depth 1 origin dfea53b977f131dc50d7060568ad4fd355d4d71e
+git -C ~/pico/pico-tflmicro checkout --detach FETCH_HEAD
 ```
 
 ---
@@ -111,6 +138,20 @@ The radio firmware is ~230 KB of the 4 MB flash, and it's there in every radio b
 
 ---
 
+## Tools
+
+Two standalone images in `firmware/tools/`, each its own CMake project with no radio code. Configure, build and flash from the repo root:
+
+```sh
+cmake -S firmware/tools/classifier_bench -B firmware/tools/classifier_bench/build -G Ninja
+cmake --build firmware/tools/classifier_bench/build
+picotool load -f -x firmware/tools/classifier_bench/build/classifier_bench.uf2
+```
+
+`classifier_bench` links the classifier, so it needs `pico-tflmicro` ([Prerequisites](#prerequisites)). It reports the arena size, inference time and scores for fixed test inputs over USB serial (`model/board_test.py` checks them against the PC), then live detections from the mic. `mic_capture` builds the same way (swap the name) and doesn't need `pico-tflmicro`; it streams the mic for `model/record.py`.
+
+---
+
 ## Gotchas
 
 - **Check that the board really is a W.** A plain Pico 2 (with headers: SC1632) looks almost the same as a Pico 2 W (with headers: SC1634) and runs radio images without crashing. The radio just never starts, and the LED stays steadily on, because on a Pico 2 the LED is on GP25, which the driver holds high as the radio's chip select. A Pico 2 W has a metal shield and an antenna at the end opposite the USB port.
@@ -122,6 +163,8 @@ The radio firmware is ~230 KB of the 4 MB flash, and it's there in every radio b
 - **`Skipping some Pico W examples as WIFI_SSID is not defined`** is expected. We don't use Wi-Fi on the nodes.
 - **picotool ≥ 2.0.** 1.x doesn't know the RP2350. The SDK finds the Homebrew picotool (`Using picotool from /opt/homebrew/bin/picotool`); without one it downloads and builds picotool during the first build.
 - **One SDK version.** pico-examples tracks the SDK, so mismatched versions can fail to build. Keep pico-examples on the matching `sdk-<version>` tag.
+- **`pico-tflmicro not found at ...`** at configure means there's no checkout where `classifier.cmake` looks (it checks for `src/tensorflow/lite/micro/micro_interpreter.h`). Run `scripts/install-firmware-tooling.sh`, or point `PICO_TFLMICRO_PATH` at your checkout. The path is cached, so after fixing it delete the build directory (or pass `-DPICO_TFLMICRO_PATH=...`) and configure again.
+- **Stay on `pico-tflmicro` `dfea53b`.** It's the commit the classifier was built and measured on. `classifier.cmake` globs its sources and carries two workarounds for it under GCC 15 (`-include cstdint`, `ARDUINO=1`), so another commit may not build or may give different numbers.
 
 ---
 

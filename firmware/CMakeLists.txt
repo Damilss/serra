@@ -29,6 +29,11 @@ pico_sdk_init()
 
 add_executable(node
     main.c
+    blink_light/blink_light.c
+    mesh/ble.c
+    mesh/mesh.c
+    mesh/tx_queue.c
+    mesh/console.c
 )
 
 # btstack_config.h lives next to this file; BTstack includes it by name.
@@ -37,6 +42,10 @@ target_include_directories(node PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 # Bluetooth only, no IP stack: poll mode defaults to lwIP on, so turn it off.
 target_compile_definitions(node PRIVATE
     CYW43_LWIP=0
+    # at boot, wait up to 3 s for a serial monitor so the startup log isn't lost
+    PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=3000
+    # log every tx-queue switch on serial; noisy, turn off once the mesh is verified
+    TXQ_DEBUG=1
 )
 
 target_link_libraries(node
@@ -44,6 +53,8 @@ target_link_libraries(node
     pico_cyw43_arch_poll   # radio driver; work happens only when the runtime calls cyw43_arch_poll()
     pico_btstack_ble       # BTstack, LE only
     pico_btstack_cyw43     # BTstack transport over the CYW43439
+    pico_unique_id         # board ID -> mesh node ID
+    pico_rand              # random msg_id seed at boot
 )
 
 # printf over USB serial (/dev/cu.usbmodem*), not UART0. Also lets `picotool load -f`
