@@ -122,24 +122,29 @@ gitleaks_ok() {
 	version_at_least "$major" "$minor" "$GITLEAKS_MIN_MAJOR" "$GITLEAKS_MIN_MINOR"
 }
 
-# Where Playwright keeps its browsers (it honours PLAYWRIGHT_BROWSERS_PATH).
-playwright_cache() {
-	if [[ -n "${PLAYWRIGHT_BROWSERS_PATH:-}" ]]; then
-		echo "$PLAYWRIGHT_BROWSERS_PATH"
-	elif [[ "$(uname -s)" == Darwin ]]; then
-		echo "$HOME/Library/Caches/ms-playwright"
-	else
-		echo "${XDG_CACHE_HOME:-$HOME/.cache}/ms-playwright"
-	fi
+# Install directories of the browser builds the pinned Playwright runs Chromium
+# with (Chromium, its headless shell, ffmpeg), one per line. `playwright install
+# --dry-run` reports them without downloading, honours PLAYWRIGHT_BROWSERS_PATH,
+# and names the exact revisions this Playwright version expects. Fails if the
+# app's Playwright isn't installed yet.
+playwright_chromium_dirs() {
+	local line re='^[[:space:]]*Install location:[[:space:]]*(.+)$'
+	while IFS= read -r line; do
+		[[ "$line" =~ $re ]] && echo "${BASH_REMATCH[1]}"
+	done < <(cd "$APP_DIR" && npx --no-install playwright install --dry-run chromium 2>/dev/null)
 }
 
-# True if a Chromium build is in the Playwright cache.
+# True if every build the pinned Playwright needs for Chromium is fully
+# installed. Playwright writes INSTALLATION_COMPLETE once a download finishes,
+# so other projects' revisions or half-finished downloads don't count.
 playwright_chromium_ok() {
-	local dir
-	for dir in "$(playwright_cache)"/chromium*; do
-		[[ -d "$dir" ]] && return 0
-	done
-	return 1
+	local dir found=0
+	while IFS= read -r dir; do
+		[[ -n "$dir" ]] || continue
+		found=1
+		[[ -f "$dir/INSTALLATION_COMPLETE" ]] || return 1
+	done < <(playwright_chromium_dirs)
+	[[ "$found" == 1 ]]
 }
 
 # ---- app setup (both OSes) ---------------------------------------------------
@@ -166,7 +171,7 @@ install_npm_packages() {
 
 install_playwright_chromium() {
 	if playwright_chromium_ok; then
-		notice "Playwright Chromium found in $(playwright_cache)"
+		notice "Playwright Chromium found in $(dirname "$(playwright_chromium_dirs | head -n 1)")"
 		return
 	fi
 	notice "installing Playwright Chromium for the E2E tests"
@@ -400,7 +405,7 @@ main() {
 		missing=1
 	fi
 	if playwright_chromium_ok; then
-		printf '  %-18s %s\n' chromium "$(playwright_cache)"
+		printf '  %-18s %s\n' chromium "$(playwright_chromium_dirs | head -n 1)"
 	else
 		printf '  %-18s MISSING: cd app && npx playwright install chromium\n' chromium
 		missing=1
