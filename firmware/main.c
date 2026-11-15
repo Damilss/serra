@@ -6,11 +6,13 @@
  */
 #include <stdio.h>
 
+#include "audio/listen.h"
 #include "blink_light/blink_light.h"
 #include "mesh/console.h"
 #include "mesh/mesh.h"
 #include "pico/cyw43_arch.h"
 #include "pico/stdlib.h"
+#include "runtime/ipc.h"
 
 /**
  * BLINK_PERIOD_MS - LED toggle interval; 1000 ms = one blink every 2 s
@@ -41,16 +43,24 @@ int main(void) {
 		return 1;
 	}
 
+	if (ipc_init()) {
+		printf("[main] ipc_init failed\n");
+		return 1;
+	}
+
 	if (blink_light_init(BLINK_PERIOD_MS)) {
 		printf("[main] blink_light_init failed\n");
 		return 1;
 	}
 
-	/* TEMPORARY: serial test commands + fake alerts until audio exists */
+	/* serial test console (a/b/u/s/h); sends nothing unless a command is typed */
 	if (console_init()) {
 		printf("[main] console_init failed\n");
 		return 1;
 	}
+
+	/* core 1: mic + classifier; detections reach the mesh through ipc */
+	listen_start();
 
 	printf("[main] main loop running\n");
 	for (;;) {
