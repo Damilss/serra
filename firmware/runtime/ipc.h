@@ -12,9 +12,9 @@
  * async_context, so core 0 wakes, takes it off the queue and sends it over
  * the mesh as an alert. core 1 never touches BTstack or the mesh.
  *
- * this header deliberately doesn't include mesh/packet.h: core 1's code
- * includes classifier.h, whose CLASS_* macros clash with packet.h's
- * alert_class_t enum constants of the same names.
+ * ipc_detection_t carries only the classifier's fields; core 0 turns it
+ * into the mesh's alert_payload_t (ipc.c), so core 1 doesn't depend on the
+ * wire format.
  */
 #ifndef RUNTIME_IPC_H
 #define RUNTIME_IPC_H

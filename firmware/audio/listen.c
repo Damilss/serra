@@ -159,7 +159,8 @@ static void core1_main(void) {
 
 	mic_init(LISTEN_PIN_SD, LISTEN_PIN_SCK);
 	skip_startup(samples);
-	printf("[listen] mic + classifier running on core 1\n");
+	printf("[listen] mic (%s) + classifier running on core 1\n",
+		   mic_is_bitstream() ? "raw bitstream, filtered" : "I2S");
 
 	for (;;) {
 		size_t n = mic_read(samples, LISTEN_CHUNK);
