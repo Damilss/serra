@@ -318,5 +318,5 @@ uv run ruff check        # lint
 - [ ] Define the `HEARTBEAT` payload. The Supabase schema expects battery percentage and millivolts from it.
 - [ ] `app/supabase/seed.sql` stores `peak_level` 3100 for 62 dB. On the wire `peak_level` is tenths of a dB, so 62 dB is 620.
 - [ ] Test BlueZ delivery with nRF Connect (see [Gotchas](#gotchas)).
-- [ ] Check the Pi 5's power over the laptop's USB-C, with and without a powered hub.
+- [x] Check the Pi 5's power over the laptop's USB-C, with and without a powered hub.
 - [ ] Update the root README (decision 8, the Base station section, the repository layout) and CONTRIBUTING's layout table: the dashboard now runs on the laptop, and the Pi talks to it over USB.
