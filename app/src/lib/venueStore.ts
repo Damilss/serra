@@ -1,5 +1,9 @@
-// State for the venue demo page (/demo): the triangle layout, the calls located so far, and the live
+// State for the venue demo page (/demo): the triangle layout, the calls detected so far, and the live
 // link to the base-station decoder. Separate from the field dashboard's store.
+//
+// Detect-only demo: a call shows that the Serranodes heard it, classified it on the device, flooded
+// an alert across the mesh, and that the base station received it. It is not located on the floor
+// (loudness trilateration was too unreliable indoors; lib/venue.ts still has it for later).
 //
 // Calls come from two places: simulated (click the floor or a taped mark) and live (alerts from the
 // decoder, grouped into one call per whistle by lib/decoder.ts, then passed to ingest()).
@@ -9,16 +13,7 @@
 import { create } from 'zustand';
 import { PI_URL, type DecoderHealth, type Heard, type LinkState } from './decoder';
 import { now } from './format';
-import {
-  DEFAULT_NODE_IDS,
-  makeLayout,
-  seeded,
-  simulateReadings,
-  trilaterate,
-  type Fix,
-  type VenueLayout,
-  type VenueReading,
-} from './venue';
+import { DEFAULT_NODE_IDS, dist, makeLayout, seeded, simulateReadings, type VenueLayout } from './venue';
 import type { MapPoint } from './types';
 
 export interface VenueCall {
@@ -26,17 +21,17 @@ export interface VenueCall {
   wall: Date;
   /** now() when the call happened, for the map animation. */
   t0: number;
-  /** Where the caller really was. Known for simulated calls only. */
+  /** Where the caller stood. Known for simulated calls only, to animate the sound reaching each node. */
   truth: MapPoint | null;
-  /** Readings used for the fit, after calibration (tenths of a dB). */
-  readings: VenueReading[];
-  /** Level each node heard, dB after calibration, by node index; null if that node didn't report. */
+  /** Level each corner's node heard, dB, by corner index; null if that node didn't report. */
   levels: (number | null)[];
-  /** peak_level as each node sent it, before calibration (tenths of a dB); null if it didn't report. */
-  raw: (number | null)[];
-  /** Null when fewer than three nodes heard the call: two readings can't pin a spot. */
-  fix: Fix | null;
-  /** What the loudest node classified it as. */
+  /** Class each node's own classifier reported, by corner index; null if it didn't report. */
+  classes: (string | null)[];
+  /** Classifier confidence each node reported, 0–1, by corner index. */
+  confidence: (number | null)[];
+  /** Relays each node's alert took to reach the base station (0 = heard directly), by corner index. */
+  hops: (number | null)[];
+  /** What the node that heard it loudest classified it as. */
   cls: string;
   source: 'simulated' | 'live';
 }
@@ -53,19 +48,15 @@ export interface SeenNode {
 interface VenueState {
   layout: VenueLayout;
   calls: VenueCall[];
-  /** Show the true caller position (rehearsal). Off for the live demo. */
+  /** Mark where a simulated caller stood (rehearsal). */
   showTruth: boolean;
   /** ±dB of measurement noise on simulated calls. */
   jitterDb: number;
-  /** Prefer estimates inside the taped triangle (see trilaterate's insideOnly). */
-  insideOnly: boolean;
 
   /** Mesh IDs at A, B and C. */
   nodeIds: number[];
   /** Whether each corner's ID was set (by hand or by the first new node heard), or is still a default. */
   assigned: boolean[];
-  /** Calibration, dB added to each corner's reading so the three agree (see calibrate()). */
-  offsets: number[];
   /** Every node the decoder has reported an alert from. */
   seen: Record<number, SeenNode>;
 
@@ -80,8 +71,10 @@ interface VenueState {
   setSideFt: (ft: number) => void;
   setShowTruth: (on: boolean) => void;
   setJitter: (db: number) => void;
-  setInsideOnly: (on: boolean) => void;
-  /** Simulates a call at `p` (click on the floor, or a taped mark). */
+  /**
+   * Simulates a call at `p` (click on the floor, or a taped mark), for rehearsal. Does nothing while
+   * connected to the live decoder, so a stray click can't put a made-up caller on screen.
+   */
   simulateAt: (p: MapPoint) => void;
   /** Adds a call from one group of live alerts. */
   ingest: (heard: Heard[]) => void;
@@ -89,12 +82,6 @@ interface VenueState {
   setNodeId: (i: number, id: number) => void;
   /** Forgets the corner assignments, so the next nodes heard are assigned in order again. */
   resetNodeIds: () => void;
-  /**
-   * Uses the latest live call, made standing at the centre mark (equally far from all three nodes),
-   * to even out the nodes: each gets the offset that brings it to the three's average.
-   */
-  calibrate: () => boolean;
-  resetCalibration: () => void;
   setDecoderUrl: (url: string) => void;
   setLiveOn: (on: boolean) => void;
   setLink: (link: LinkState) => void;
@@ -103,7 +90,7 @@ interface VenueState {
   clear: () => void;
 }
 
-// ── per-browser settings: decoder address, node IDs, calibration ──
+// ── per-browser settings: decoder address, node IDs ──
 
 const KEY = 'serra.venue.v1';
 interface Saved {
@@ -111,7 +98,6 @@ interface Saved {
   liveOn: boolean;
   nodeIds: number[];
   assigned: boolean[];
-  offsets: number[];
 }
 function load(): Partial<Saved> {
   try {
@@ -123,7 +109,6 @@ function load(): Partial<Saved> {
       liveOn: typeof s.liveOn === 'boolean' ? s.liveOn : undefined,
       nodeIds: ok3(s.nodeIds, 'number') ? s.nodeIds : undefined,
       assigned: ok3(s.assigned, 'boolean') ? s.assigned : undefined,
-      offsets: ok3(s.offsets, 'number') ? s.offsets : undefined,
     };
   } catch {
     return {};
@@ -156,13 +141,7 @@ let rnd = seeded(2026);
 export const useVenue = create<VenueState>()((set, get) => {
   const persist = () => {
     const s = get();
-    save({
-      decoderUrl: s.decoderUrl,
-      liveOn: s.liveOn,
-      nodeIds: s.nodeIds,
-      assigned: s.assigned,
-      offsets: s.offsets,
-    });
+    save({ decoderUrl: s.decoderUrl, liveOn: s.liveOn, nodeIds: s.nodeIds, assigned: s.assigned });
   };
   const push = (call: VenueCall) => set((s) => ({ calls: [call, ...s.calls].slice(0, 20) }));
   const withIds = (nodeIds: number[]) => set({ nodeIds, layout: makeLayout(get().layout.sideFt, nodeIds) });
@@ -172,11 +151,9 @@ export const useVenue = create<VenueState>()((set, get) => {
     calls: [],
     showTruth: true,
     jitterDb: 1,
-    insideOnly: true,
 
     nodeIds: startIds,
     assigned: saved.assigned ?? [false, false, false],
-    offsets: saved.offsets ?? [0, 0, 0],
     seen: {},
 
     decoderUrl: query ?? saved.decoderUrl ?? PI_URL,
@@ -191,20 +168,22 @@ export const useVenue = create<VenueState>()((set, get) => {
     },
     setShowTruth: (showTruth) => set({ showTruth }),
     setJitter: (jitterDb) => set({ jitterDb }),
-    setInsideOnly: (insideOnly) => set({ insideOnly }),
 
     simulateAt: (p) => {
-      const { layout, jitterDb, insideOnly } = get();
-      const readings = simulateReadings(layout, p, rnd, jitterDb);
+      if (get().liveOn) return;
+      const { layout, jitterDb } = get();
+      const levels = simulateReadings(layout, p, rnd, jitterDb).map((r) => r.peak / 10);
+      // every node hears and classifies it; the node farthest from the base needs one relay
+      const far = Math.max(...layout.nodes.map((n) => dist(n, layout.base)));
       push({
         id: ++seq,
         wall: new Date(),
         t0: now(),
         truth: p,
-        readings,
-        levels: readings.map((r) => r.peak / 10),
-        raw: readings.map((r) => r.peak),
-        fix: trilaterate(layout, readings, { insideOnly }),
+        levels,
+        classes: layout.nodes.map(() => 'whistle'),
+        confidence: layout.nodes.map(() => Math.round((0.86 + rnd() * 0.12) * 100) / 100),
+        hops: layout.nodes.map((n) => (dist(n, layout.base) === far ? 1 : 0)),
         cls: 'whistle',
         source: 'simulated',
       });
@@ -233,21 +212,17 @@ export const useVenue = create<VenueState>()((set, get) => {
         persist();
       }
 
-      const { layout, offsets, insideOnly } = get();
-      const raw: (number | null)[] = ids.map((id) => heard.find((h) => h.src === id)?.peak ?? null);
-      const levels = raw.map((p, i) => (p === null ? null : p / 10 + offsets[i]));
-      const readings: VenueReading[] = [];
-      levels.forEach((l, i) => l !== null && readings.push({ node: i, peak: Math.round(l * 10) }));
+      const byCorner = ids.map((id) => heard.find((h) => h.src === id) ?? null);
       const loudest = heard.reduce((a, h) => (h.peak > a.peak ? h : a));
       push({
         id: ++seq,
         wall: new Date(),
         t0: now(),
         truth: null,
-        readings,
-        levels,
-        raw,
-        fix: readings.length === 3 ? trilaterate(layout, readings, { insideOnly }) : null,
+        levels: byCorner.map((h) => (h ? h.peak / 10 : null)),
+        classes: byCorner.map((h) => h?.cls ?? null),
+        confidence: byCorner.map((h) => h?.confidence ?? null),
+        hops: byCorner.map((h) => h?.hops ?? null),
         cls: loudest.cls,
         source: 'live',
       });
@@ -273,26 +248,13 @@ export const useVenue = create<VenueState>()((set, get) => {
       persist();
     },
 
-    calibrate: () => {
-      const call = get().calls.find((c) => c.source === 'live');
-      if (!call || call.raw.some((p) => p === null)) return false;
-      const db = call.raw.map((p) => p! / 10);
-      const mean = db.reduce((a, b) => a + b, 0) / db.length;
-      set({ offsets: db.map((v) => Math.round((mean - v) * 10) / 10) });
-      persist();
-      return true;
-    },
-    resetCalibration: () => {
-      set({ offsets: [0, 0, 0] });
-      persist();
-    },
-
     setDecoderUrl: (decoderUrl) => {
       set({ decoderUrl });
       persist();
     },
     setLiveOn: (liveOn) => {
-      set({ liveOn });
+      // going live drops rehearsal calls, so no simulated caller is left on the floor
+      set(liveOn ? { liveOn, calls: [] } : { liveOn });
       persist();
     },
     setLink: (link) => set({ link }),
