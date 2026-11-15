@@ -47,9 +47,10 @@ Then trigger a node: whistle, scream or say "help" near it. Each decoded packet 
 ```
 id: 6367eb:24
 event: packet
-data: {"run_id":"6367eb","seq":24,"t_ms":7125567,"rssi":-56,"raw":"5e160bffff81c5040101f7fc03fa2f700002","magic":94,"src":2838,"dst":65535,"msg_id":50561,"ttl":4,"hops":0,"type":"ALERT","alert":{"class":"whistle","confidence":0.9686,"peak_level":1020,"peak_db":102.0,"timestamp":7352314,"blast_count":2}}
+data: {"run_id":"6367eb","seq":24,"t_ms":7125567,"rssi":-56,"raw":"5e160bffff81c5040101f7fc03fa2f700002","magic":94,"src":2838,"node_id":2838,"node_hex":"0x0B16","dst":65535,"msg_id":50561,"ttl":4,"hops":0,"type":"ALERT","alert":{"class":"whistle","confidence":0.9686,"peak_level":1020,"peak_db":102.0,"timestamp":7352314,"blast_count":2}}
 ```
 
+- `node_id` is the node that heard the sound. It matches `nodes.node_id` in Supabase, and a relayed packet (`hops` > 0) still carries the origin's ID. `node_hex` is the same ID as the Pico prints it at boot (`[mesh] node 0x0b16`).
 - `-N` turns off curl's buffering. Without it, events show up late or in batches.
 - The stream opens with `retry: 2000`. A `: ping` line after 15 s with no events means the connection is alive and nothing new has been decoded.
 - Without `Last-Event-ID`, you get **live events only**, nothing from before you connected.
@@ -60,7 +61,7 @@ To print only the JSON:
 curl -sN http://10.12.194.1:8080/events | sed -n 's/^data: //p'
 ```
 
-Add `| jq .` to pretty-print, or `| jq -c '{src, hops, class: .alert.class, peak_db: .alert.peak_db, rssi}'` for one short line per packet.
+Add `| jq .` to pretty-print, or `| jq -c '{node_hex, hops, class: .alert.class, peak_db: .alert.peak_db, rssi}'` for one short line per packet.
 
 ## 3. See packets from before you connected
 
@@ -108,4 +109,4 @@ The simulator sends an alert every 2 s (`--interval`), each heard over 2–4 pat
 
 ## Verified
 
-2026-11-14: Pi connected over USB (laptop at `10.12.194.5`), `serra-base` 0.2.0 with `source: ble`. `/health` reported 32 adverts, 26 packets and 6 duplicates. The buffered stream returned real alerts from node `2838` (`0x0B16`): whistles and a scream around 100 dB, 0 hops, RSSI about −58 dBm. No new packets arrived during a 20 s live watch.
+2026-11-14: Pi connected over USB (laptop at `10.12.194.5`), `serra-base` 0.2.0 with `source: ble`. `/health` reported 32 adverts, 26 packets and 6 duplicates. The buffered stream returned real alerts from node `2838` (`0x0B16`): whistles and a scream around 100 dB, 0 hops, RSSI about −58 dBm. No new packets arrived during a 20 s live watch. A later read of the buffer showed three nodes: `0x0B16` (2838), `0x2D9A` (11674) and `0xED70` (60784), each mostly heard directly, with a few 1-hop relays. That run predates `node_id` and `node_hex`, so its events carry the ID in `src` only.

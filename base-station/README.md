@@ -179,6 +179,8 @@ The `data` line, expanded:
   "raw": "5e4e1cffff1e010101019e5503c089460103",
   "magic": 94,
   "src": 7246,
+  "node_id": 7246,
+  "node_hex": "0x1C4E",
   "dst": 65535,
   "msg_id": 286,
   "ttl": 1,
@@ -203,6 +205,8 @@ The `data` line, expanded:
 | `rssi` | Signal strength at the base, in dBm, of the **last hop**, not of the origin node. `null` when the radio gave no reading |
 | `raw` | Manufacturer data as received (after the company ID), lowercase hex. Goes into `packets.raw` |
 | `magic` … `type` | Header fields, as in [Input](#input-serranet-packets). `type` is `"ALERT"` or `"HEARTBEAT"` |
+| `node_id` | The origin node, the node that heard the sound (same value as `src`). Matches `nodes.node_id` in Supabase, so the ingest writes it to `alerts.src_node_id` as is. A relayed packet still carries the origin's ID, not the relay's |
+| `node_hex` | `node_id` as four uppercase hex digits, e.g. `"0x0B16"`: what the Pico prints at boot (`[mesh] node 0x0b16`). For people; the ingest uses `node_id` |
 | `hops` | `TTL_INITIAL - ttl` |
 | `alert` | Present only when `type` is `"ALERT"` |
 
@@ -224,7 +228,7 @@ Decoder status as JSON, for the dashboard's boot screen and for checking the set
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "run_id": "6f1c2a",
   "source": "ble",
   "scanner": "up",
