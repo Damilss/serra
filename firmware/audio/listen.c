@@ -53,7 +53,54 @@
  */
 #define LISTEN_STACK_WORDS (16 * 1024 / 4)
 
+/**
+ * LISTEN_DEBUG - 1 = print the mic's raw peak and the classifier's level once a second
+ *
+ * for checking mic wiring: a working mic shows a small noise floor that jumps on a
+ * clap; a raw_peak stuck at 0 means no audio is arriving (wiring, solder, power).
+ * off by default; build with -DLISTEN_DEBUG=1 (e.g. in CMakeLists.txt's
+ * target_compile_definitions) to turn it on.
+ */
+#ifndef LISTEN_DEBUG
+#define LISTEN_DEBUG 0
+#endif
+
+/**
+ * LISTEN_DEBUG_PERIOD_MS - how often the debug line prints
+ */
+#define LISTEN_DEBUG_PERIOD_MS 1000
+
 static uint32_t core1_stack[LISTEN_STACK_WORDS];
+
+/**
+ * debug_level - track the raw peak and print the debug line once a period
+ * @samples: the samples just read
+ * @n: how many
+ *
+ * raw_peak is the largest |sample| since the last print, in raw 24-bit units
+ * (full scale 8388608), straight from the mic before the classifier.
+ */
+static void debug_level(const int32_t *samples, size_t n) {
+	static int32_t raw_peak;
+	static absolute_time_t next_print;
+	classifier_stats_t stats;
+
+	for (size_t i = 0; i < n; i++) {
+		int32_t a = samples[i] < 0 ? -samples[i] : samples[i];
+
+		if (a > raw_peak)
+			raw_peak = a;
+	}
+
+	if (!time_reached(next_print))
+		return;
+	next_print = make_timeout_time_ms(LISTEN_DEBUG_PERIOD_MS);
+
+	classifier_get_stats(&stats);
+	printf("[listen] mic raw_peak=%ld level=%d windows=%lu inferences=%lu\n", (long)raw_peak,
+		   stats.level, (unsigned long)stats.windows, (unsigned long)stats.inferences);
+	raw_peak = 0;
+}
 
 /**
  * skip_startup - throw away the mic's first MIC_STARTUP_SAMPLES samples
@@ -123,6 +170,8 @@ static void core1_main(void) {
 		}
 
 		classifier_push(samples, n);
+		if (LISTEN_DEBUG)
+			debug_level(samples, n);
 		if (classifier_poll(&result))
 			post_detection(&result);
 	}
