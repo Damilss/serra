@@ -71,7 +71,11 @@ int main(void) {
 				packet[9 + 3 * i] = (uint8_t)(samples[i] >> 8);
 				packet[10 + 3 * i] = (uint8_t)(samples[i] >> 16);
 			}
-			/* raw bytes: no newline, no CR/LF translation */
+			/*
+			 * raw bytes: no newline, no CR/LF translation. a stalled host makes this give up
+			 * after PICO_STDIO_USB_STDOUT_TIMEOUT_US (see CMakeLists.txt), well inside the mic
+			 * ring, so lost packets show up as a gap in the index rather than spliced audio.
+			 */
 			stdio_put_string((const char *)packet, sizeof(packet), false, false);
 			stdio_flush();
 		}

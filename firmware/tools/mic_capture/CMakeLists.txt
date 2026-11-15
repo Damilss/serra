@@ -42,6 +42,14 @@ target_link_libraries(mic_capture
     hardware_dma   # mic samples into the ring buffer
 )
 
+# If the host stops reading, give up on a write after 50 ms instead of the SDK's 500 ms.
+# The mic ring holds 256 ms (MIC_BUFFER_SAMPLES at 16 kHz), so a stalled host now costs
+# the packets it never read, which show as a gap in the sample index, and never lets DMA
+# overwrite audio that hasn't been read yet.
+target_compile_definitions(mic_capture PRIVATE
+    PICO_STDIO_USB_STDOUT_TIMEOUT_US=50000
+)
+
 # Audio goes out over USB serial; UART stays off.
 pico_enable_stdio_usb(mic_capture 1)
 pico_enable_stdio_uart(mic_capture 0)
