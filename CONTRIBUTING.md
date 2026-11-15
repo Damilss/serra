@@ -20,7 +20,7 @@ Thanks for helping. Serra is an off-grid search and rescue mesh: Pico 2 W nodes 
 
 ## Project status
 
-**Early firmware.** The node firmware builds on the Pico SDK 2.3.1. `scripts/install-firmware-tooling.sh` installs the toolchain and the SDK, and the SDK's Wi-Fi blink and BLE examples build for the Pico 2 W. `firmware/CMakeLists.txt` is in place, but our own build isn't finished: `main.c` is empty and `btstack_config.h` doesn't exist yet. `runtime/`, `audio/`, `classifier/` and `mesh/` are empty placeholders. The model and base station have no code yet. See [`firmware/README.md`](firmware/README.md#status) for the detailed status.
+**Early firmware.** The node firmware builds on the Pico SDK 2.3.1. `scripts/install-firmware-tooling.sh` installs the toolchain, the SDK and pico-tflmicro, and the SDK's Wi-Fi blink and BLE examples build for the Pico 2 W. `firmware/CMakeLists.txt` is in place, but our own build isn't finished: `main.c` is empty and `btstack_config.h` doesn't exist yet. `runtime/`, `audio/` and `mesh/` are empty placeholders. `classifier/` runs the model on [TensorFlow Lite Micro](https://github.com/raspberrypi/pico-tflmicro) and is measured on the board by `firmware/tools/classifier_bench`, but isn't wired into `main.c` yet; `model/` trains it. The base station has no code yet. See [`firmware/README.md`](firmware/README.md#status) for the detailed status.
 
 - **Looking for something to do?** [Known limitations and open questions](README.md#known-limitations-and-open-questions) and [Future work](README.md#future-work) list what's still open.
 
@@ -64,6 +64,8 @@ You only need the toolchain for the part you're working on.
 The firmware builds on the [Pico SDK](https://github.com/raspberrypi/pico-sdk), pinned to **2.3.1** ([design decision 6](README.md#6-keep-the-pico-sdks-radio-driver)).
 
 - **Install:** run `scripts/install-firmware-tooling.sh` (Homebrew on macOS, apt on Linux; `DRY_RUN=1` previews it). It installs the Arm GNU toolchain, CMake, Ninja, [`picotool`](https://github.com/raspberrypi/picotool) 2.x and clang-format. It also clones the SDK with its submodules to `~/pico/pico-sdk`, or to `$PICO_SDK_PATH` if you've set it. Then add `export PICO_SDK_PATH="$HOME/pico/pico-sdk"` to your shell profile.
+  - It also clones [pico-tflmicro](https://github.com/raspberrypi/pico-tflmicro) (TensorFlow Lite Micro for the Pico, [design decision 12](README.md#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)) at its pinned commit next to the SDK (`~/pico/pico-tflmicro`), or to `$PICO_TFLMICRO_PATH` if you've set it. The build looks in the same place, so the defaults need no extra setup. If you set `PICO_TFLMICRO_PATH`, keep it set when you build too (export it in your shell profile like `PICO_SDK_PATH`). Only builds that link the classifier need it: `firmware/tools/classifier_bench` today, and the node firmware once the classifier is wired into `main.c`.
+  - An existing pico-tflmicro checkout is left as it is. If it's on a different commit, the script prints the commands to switch.
 - **Board:** configure with `-DPICO_BOARD=pico2_w`. Builds target the Arm cores (`rp2350-arm-s`) by default. For the Hazard3 RISC-V cores, add `-DPICO_PLATFORM=rp2350-riscv` and install a RISC-V toolchain.
 - **First build:** build and flash the SDK's blink and BLE examples before touching our code. See the [smoke test](firmware/README.md#smoke-test).
 - **Flash:** hold BOOTSEL while plugging the board in, then run `picotool load -x <file>.uf2`, or copy the `.uf2` onto the `RP2350` drive.
@@ -119,8 +121,9 @@ Nodes (C) and the base station (Python) have to agree byte for byte. If you chan
 
 ### Build on the pinned Pico SDK
 
-- **No new dependencies without a decision.** The Pico SDK and the libraries it bundles (CYW43 driver, BTstack, newlib) are the chosen base. If you think we need anything else, propose it as a design decision first.
+- **No new dependencies without a decision.** The Pico SDK and the libraries it bundles (CYW43 driver, BTstack, newlib) are the chosen base, plus [pico-tflmicro](https://github.com/raspberrypi/pico-tflmicro) for the classifier ([design decision 12](README.md#12-tensorflow-lite-micro-from-a-pinned-pico-tflmicro-checkout)). If you think we need anything else, propose it as a design decision first.
 - **One SDK version for everyone.** The firmware is built against Pico SDK 2.3.1 (`PICO_SDK_VERSION` in `scripts/install-firmware-tooling.sh`). An upgrade is its own PR: bump the script, rebuild, retest on hardware and update the docs.
+- **One pico-tflmicro commit for everyone.** The classifier is built against pico-tflmicro `dfea53b` (`PICO_TFLMICRO_COMMIT` in `scripts/install-firmware-tooling.sh`). Moving the pin is its own PR, like an SDK upgrade: bump `PICO_TFLMICRO_COMMIT`, rebuild `classifier_bench`, rerun `model/board_test.py` against the PC scores and update the docs.
 - **SDK drivers before register code.** When you do need register-level access, for example for low-power states the SDK doesn't cover, use the SDK's `hardware/regs/` and `hardware/structs/` headers rather than hand-typed addresses.
 
 ### Leave the SDK's radio stack alone
@@ -203,4 +206,4 @@ Open an [issue](https://github.com/Damilss/serra/issues).
 
 Serra is licensed under the [GNU General Public License v3.0](LICENSE). By contributing, you agree that your contributions are licensed under the same terms.
 
-Only bring in third-party code, models or datasets whose license allows it, and note the source and license in your PR.
+Only bring in third-party code, models or datasets whose license allows it, and note the source and license in your PR. For example, pico-tflmicro (not vendored; the install script clones it) is Apache-2.0, and the code vendored in `firmware/classifier/third_party/` lists its sources and licenses in [that folder's README](firmware/classifier/third_party/README.md).
