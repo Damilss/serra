@@ -9,20 +9,23 @@
 #   - cmake, ninja        the Pico SDK's build system
 #   - Pico SDK            pinned release, cloned with its submodules
 #                         (cyw43-driver, btstack, lwip, mbedtls, tinyusb)
+#   - pico-tflmicro       TensorFlow Lite Micro for the classifier, pinned commit
 #   - picotool >= 2.0     loads images over USB (1.x does not support the RP2350)
 #   - clang-format        C formatting (see CONTRIBUTING.md)
 #   - host C/C++ compiler and python3: the SDK builds small host tools (pioasm)
 #                         and generates BTstack GATT headers during the build
 #
-# The SDK goes to $PICO_SDK_PATH if set, otherwise ~/pico/pico-sdk. This script
-# doesn't edit your shell profile: it prints the PICO_SDK_PATH line to add.
+# The SDK goes to $PICO_SDK_PATH if set, otherwise ~/pico/pico-sdk. pico-tflmicro
+# goes to $PICO_TFLMICRO_PATH if set, otherwise next to the SDK
+# (~/pico/pico-tflmicro), which is where the firmware build looks for it. This
+# script doesn't edit your shell profile: it prints the PICO_SDK_PATH line to add.
 #
 # Supported:
 #   - Debian-based Linux with apt: Raspberry Pi OS on a Pi 5, Ubuntu, Debian
 #   - macOS with Homebrew (installed if missing)
 #
-# Safe to re-run: tools that are already installed are skipped, and an existing
-# SDK checkout is checked but never changed.
+# Safe to re-run: tools that are already installed are skipped, and existing SDK
+# and pico-tflmicro checkouts are checked but never changed.
 #
 # Usage:
 #   scripts/install-firmware-tooling.sh
@@ -38,6 +41,12 @@ DRY_RUN="${DRY_RUN:-0}"
 PICO_SDK_VERSION=2.3.1
 PICO_SDK_DIR="${PICO_SDK_PATH:-$HOME/pico/pico-sdk}"
 PICO_SDK_SUBMODULES=(lib/btstack lib/cyw43-driver lib/lwip lib/mbedtls lib/tinyusb)
+
+# TensorFlow Lite Micro for the classifier (firmware/classifier/classifier.cmake).
+# pico-tflmicro has no releases, so it's pinned to a commit. The default path is
+# the one classifier.cmake uses: a pico-tflmicro folder next to the SDK.
+PICO_TFLMICRO_COMMIT=dfea53b977f131dc50d7060568ad4fd355d4d71e
+PICO_TFLMICRO_DIR="${PICO_TFLMICRO_PATH:-$(dirname "$PICO_SDK_DIR")/pico-tflmicro}"
 
 # Where picotool is built from source if no package is new enough (Linux only).
 SRC_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/serra/tooling"
@@ -139,6 +148,67 @@ check_pico_sdk() {
 	return "$rc"
 }
 
+# ---- pico-tflmicro (both OSes) -----------------------------------------------
+
+PICO_TFLMICRO_URL=https://github.com/raspberrypi/pico-tflmicro.git
+
+# Commit the pico-tflmicro checkout is on, or "unknown commit". --verify keeps
+# rev-parse from echoing "HEAD" in a repo with no commits yet.
+pico_tflmicro_commit() {
+	git -C "$PICO_TFLMICRO_DIR" rev-parse --verify --quiet HEAD 2>/dev/null || echo "unknown commit"
+}
+
+# Fetch the pinned commit into $PICO_TFLMICRO_DIR (an existing git repo) and
+# check it out.
+fetch_pico_tflmicro() {
+	run git -C "$PICO_TFLMICRO_DIR" fetch --depth 1 "$PICO_TFLMICRO_URL" "$PICO_TFLMICRO_COMMIT"
+	run git -C "$PICO_TFLMICRO_DIR" checkout --quiet --detach FETCH_HEAD
+}
+
+install_pico_tflmicro() {
+	if [[ -d "$PICO_TFLMICRO_DIR/.git" ]] && [[ "$(pico_tflmicro_commit)" == "unknown commit" ]]; then
+		# A repo with no commits is a clone this script started and didn't
+		# finish (e.g. the fetch failed). There's nothing in it to lose.
+		notice "finishing an incomplete pico-tflmicro clone in $PICO_TFLMICRO_DIR"
+		fetch_pico_tflmicro
+		return
+	fi
+	if [[ -d "$PICO_TFLMICRO_DIR/.git" ]]; then
+		# Someone's existing checkout: report, don't touch.
+		local commit
+		commit="$(pico_tflmicro_commit)"
+		notice "pico-tflmicro found at $PICO_TFLMICRO_DIR (${commit:0:7})"
+		if [[ "$commit" != "$PICO_TFLMICRO_COMMIT" ]]; then
+			warn "the classifier is pinned to pico-tflmicro ${PICO_TFLMICRO_COMMIT:0:7}. To switch this checkout:"
+			warn "  git -C \"$PICO_TFLMICRO_DIR\" fetch --depth 1 origin $PICO_TFLMICRO_COMMIT"
+			warn "  git -C \"$PICO_TFLMICRO_DIR\" checkout $PICO_TFLMICRO_COMMIT"
+		fi
+		return
+	fi
+	[[ -e "$PICO_TFLMICRO_DIR" ]] && die "$PICO_TFLMICRO_DIR exists but isn't a git checkout; move it or set PICO_TFLMICRO_PATH"
+
+	# git clone --branch takes a branch or tag, not a commit, so fetch the
+	# pinned commit into an empty repo instead.
+	notice "cloning pico-tflmicro ${PICO_TFLMICRO_COMMIT:0:7} into $PICO_TFLMICRO_DIR"
+	run mkdir -p "$(dirname "$PICO_TFLMICRO_DIR")"
+	run git init --quiet "$PICO_TFLMICRO_DIR"
+	run git -C "$PICO_TFLMICRO_DIR" remote add origin "$PICO_TFLMICRO_URL"
+	fetch_pico_tflmicro
+}
+
+# Print pico-tflmicro's path and commit. Returns 1 if it's missing.
+check_pico_tflmicro() {
+	# The header classifier.cmake checks for.
+	if [[ ! -f "$PICO_TFLMICRO_DIR/src/tensorflow/lite/micro/micro_interpreter.h" ]]; then
+		printf '  %-18s MISSING (%s)\n' pico-tflmicro "$PICO_TFLMICRO_DIR"
+		return 1
+	fi
+	local commit pinned="pinned"
+	commit="$(pico_tflmicro_commit)"
+	[[ "$commit" == "$PICO_TFLMICRO_COMMIT" ]] || pinned="not the pinned ${PICO_TFLMICRO_COMMIT:0:7}"
+	printf '  %-18s %s (%s, %s)\n' pico-tflmicro "$PICO_TFLMICRO_DIR" "${commit:0:7}" "$pinned"
+}
+
 # ---- Linux (apt) -------------------------------------------------------------
 
 apt_install() {
@@ -228,6 +298,7 @@ install_linux() {
 	have arm-none-eabi-gcc || apt_install gcc-arm-none-eabi libnewlib-arm-none-eabi libstdc++-arm-none-eabi-newlib
 	have clang-format || apt_install clang-format
 	install_pico_sdk
+	install_pico_tflmicro
 	install_picotool_linux
 
 	# The picotool udev rules grant access to the plugdev group.
@@ -290,6 +361,7 @@ install_macos() {
 
 	have clang-format || run brew install clang-format
 	install_pico_sdk
+	install_pico_tflmicro
 }
 
 # ---- main --------------------------------------------------------------------
@@ -321,6 +393,7 @@ main() {
 		fi
 	done
 	check_pico_sdk || missing=1
+	check_pico_tflmicro || missing=1
 
 	echo
 	if have arm-none-eabi-gcc; then
@@ -337,6 +410,13 @@ main() {
 		echo
 		warn "PICO_SDK_PATH isn't set. Add this to your shell profile (~/.bashrc or ~/.zshrc):"
 		warn "  export PICO_SDK_PATH=\"$PICO_SDK_DIR\""
+	fi
+	# classifier.cmake only finds a pico-tflmicro outside the default spot if
+	# PICO_TFLMICRO_PATH is set at build time too.
+	if [[ "$PICO_TFLMICRO_DIR" != "$(dirname "$PICO_SDK_DIR")/pico-tflmicro" ]]; then
+		echo
+		warn "pico-tflmicro isn't next to the SDK. Keep this in your shell profile too:"
+		warn "  export PICO_TFLMICRO_PATH=\"$PICO_TFLMICRO_DIR\""
 	fi
 
 	echo

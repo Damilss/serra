@@ -1,0 +1,30 @@
+[project]
+name = "serra-model"
+version = "0.1.0"
+description = "Training pipeline for the Serra distress-sound classifier (whistle / scream / help)"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "numpy",
+    "pyserial>=3.5",
+    "scipy",
+    "soundfile",
+    "tensorflow>=2.18,<2.21",
+]
+
+[dependency-groups]
+dev = ["ruff"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# dev_ui.py serves its web page (HTML, CSS and JavaScript) from one string, PAGE. Its long
+# lines are page source, which the formatter leaves alone.
+"dev_ui.py" = ["E501"]
