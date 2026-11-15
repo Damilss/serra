@@ -24,6 +24,8 @@ Handoff from the model side to the firmware side. Covers the mic, the runtime th
 
 Source: INMP441 datasheet DS-INMP441-00 rev 1.1 (Electrical Characteristics, Timing, Power Management and I²S Data Interface sections).
 
+**Bitstream fallback (2026-11-14).** One of our three mics came back from rework ignoring WS: it sends its raw one-bit converter output on SD at the SCK rate instead of I2S words, in both halves of the frame. A healthy mic could not be made to do this with any WS signal we tried, so we treat that chip as damaged. The audio in the stream is good, so `mic_init()` checks for it at boot (0.4 s) and, if found, `mic_read()` filters it to the same 16 kHz, 24-bit samples (1.024 MHz → 64 kHz → 16 kHz, flat to 7 kHz, then a DC blocker). Coefficients come from `model/pdm_filter.py`. Measured on that mic: room noise within 2-3 dB per band of a healthy mic, test tones at the right frequency with no folded images above -33 dB, classifier in real time. Its level is not calibrated against the healthy mics. `classifier_bench` and `board_test.py` report which path a mic is on.
+
 ---
 
 ## 2. Runtime the model needs

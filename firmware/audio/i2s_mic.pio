@@ -33,3 +33,15 @@ right_slot:
 	nop                     side 0b00   ; cycle 63: WS low, one cycle ahead of the left slot
 	nop                     side 0b01
 .wrap
+
+; Fallback for a mic that ignores WS and sends its raw one-bit stream on SD (see mic.h):
+; the same SCK, WS held low, and every bit shifted in. Same pins and clock divider as above,
+; so one frame's worth of SCK cycles gives two 32-bit words of bitstream.
+
+.program bitstream_mic
+.side_set 2
+
+.wrap_target
+	nop                 side 0b00   ; SCK low
+	in pins, 1          side 0b01   ; SCK high: read bit
+.wrap

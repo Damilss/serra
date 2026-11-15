@@ -155,6 +155,8 @@ static void report(bool ok, size_t heap_used) {
 		classifier_push(noise, 256);
 	}
 	printf("features_us %lu\n", (unsigned long)((time_us_32() - t0) / 50));
+	/* 1 if the mic is on the bitstream fallback (see mic.h), 0 for normal I2S */
+	printf("mic_bitstream %d\n", mic_is_bitstream() ? 1 : 0);
 	printf("live\n");
 }
 

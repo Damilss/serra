@@ -74,6 +74,11 @@ def main() -> None:
     print(f"Inference: {mean / 1000:.1f} ms (min {lo / 1000:.1f}, max {hi / 1000:.1f})")
     print(f"Features:  {int(report['features_us'][0]) / 1000:.2f} ms per 20 ms frame")
 
+    if report.get("mic_bitstream") == ["1"]:
+        print("Mic:       bitstream fallback (this mic ignores WS; see firmware/audio/mic.h)")
+    else:
+        print("Mic:       I2S")
+
     x = np.stack([pattern(n) for n in range(PATTERNS)]).astype(np.float32)[..., None] / 255.0
     pc = np.round(run_tflite((OUT / "serra.tflite").read_bytes(), x) * 256).astype(int)
     same = True
