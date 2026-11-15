@@ -1,0 +1,100 @@
+[
+  {
+    "name": "readme_whistle_distress",
+    "hex": "5e4e1cffff1e010101019e5503c089460103",
+    "expect": {
+      "magic": 94,
+      "src": 7246,
+      "dst": 65535,
+      "msg_id": 286,
+      "ttl": 1,
+      "type": "ALERT",
+      "hops": 3,
+      "alert": {
+        "class_id": 1,
+        "class": "whistle",
+        "confidence": 158,
+        "peak_level": 853,
+        "timestamp": 21400000,
+        "blast_count": 3
+      }
+    }
+  },
+  {
+    "name": "scream",
+    "hex": "5e0201ffff0b0a020102e6f40340e2010000",
+    "expect": {
+      "magic": 94,
+      "src": 258,
+      "dst": 65535,
+      "msg_id": 2571,
+      "ttl": 2,
+      "type": "ALERT",
+      "hops": 2,
+      "alert": {
+        "class_id": 2,
+        "class": "scream",
+        "confidence": 230,
+        "peak_level": 1012,
+        "timestamp": 123456,
+        "blast_count": 0
+      }
+    }
+  },
+  {
+    "name": "help_negative_peak_level",
+    "hex": "5efe00ffffffff0301034d83ffffffffff00",
+    "expect": {
+      "magic": 94,
+      "src": 254,
+      "dst": 65535,
+      "msg_id": 65535,
+      "ttl": 3,
+      "type": "ALERT",
+      "hops": 1,
+      "alert": {
+        "class_id": 3,
+        "class": "help",
+        "confidence": 77,
+        "peak_level": -125,
+        "timestamp": 4294967295,
+        "blast_count": 0
+      }
+    }
+  },
+  {
+    "name": "heartbeat_empty_payload",
+    "hex": "5e4200ffff07000302",
+    "expect": {
+      "magic": 94,
+      "src": 66,
+      "dst": 65535,
+      "msg_id": 7,
+      "ttl": 3,
+      "type": "HEARTBEAT",
+      "hops": 1,
+      "alert": null
+    }
+  },
+  {
+    "name": "fresh_ttl4_unicast_dst",
+    "hex": "5e030001000100040101ff84038813000003",
+    "expect": {
+      "magic": 94,
+      "src": 3,
+      "dst": 1,
+      "msg_id": 1,
+      "ttl": 4,
+      "type": "ALERT",
+      "hops": 0,
+      "alert": {
+        "class_id": 1,
+        "class": "whistle",
+        "confidence": 255,
+        "peak_level": 900,
+        "timestamp": 5000,
+        "blast_count": 3
+      }
+    }
+  }
+]
