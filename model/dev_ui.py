@@ -203,11 +203,14 @@ class Recorder:
                 self.listening = False
                 self.scores, self.ran = [0] * len(CLASSES), False
 
-    def listen(self, on: bool) -> None:
+    def listen(self, on: bool) -> bool:
+        """Returns True when this starts a new listening session."""
         with self.lock:
-            if on and not self.listening:
+            fresh = on and not self.listening
+            if fresh:
                 self.alerts, self.steps, self.inferences = [], 0, 0
             self.listening = on
+            return fresh
 
     def start(self, label: str, name: str, limit: float) -> None:
         with self.lock:
@@ -299,12 +302,17 @@ class MacMic:
     def __init__(self, recorder: Recorder) -> None:
         self.recorder = recorder
         self.lock = threading.Lock()
-        self.audio = np.zeros(0, dtype=np.int16)
-        self.pending = 0
-        self.best = [0.0] * len(ALERT_CLASSES)
-        self.active = False
-        self.quiet = self.hops = 0
-        self.peak = 0.0
+        self.reset()
+
+    def reset(self) -> None:
+        """Drops buffered audio and any open alert, so a new session starts clean."""
+        with self.lock:
+            self.audio = np.zeros(0, dtype=np.int16)
+            self.pending = 0
+            self.best = [0.0] * len(ALERT_CLASSES)
+            self.active = False
+            self.quiet = self.hops = 0
+            self.peak = 0.0
 
     def feed(self, pcm: np.ndarray) -> None:
         with self.lock:
@@ -600,7 +608,8 @@ def main() -> None:
             elif self.path == "/source":
                 recorder.set_source(body.get("source", ""))
             elif self.path == "/listen":
-                recorder.listen(bool(body.get("on")))
+                if recorder.listen(bool(body.get("on"))):
+                    mac.reset()
             self._send(b"{}", "application/json")
 
         def log_message(self, *_) -> None:

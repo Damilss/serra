@@ -54,7 +54,9 @@ def fetch_nonspeech(keep: bool) -> None:
             download(f"{NONSPEECH}/{remote}/content", out / local)
             continue
         split = local.removesuffix(".zip")
-        if (out / split).is_dir() and any((out / split).iterdir()):
+        # Written only after every clip is out, so an interrupted run extracts again.
+        done = out / f"{split}.done"
+        if done.exists():
             continue
         archive = RAW / "nonspeech7k" / local
         download(f"{NONSPEECH}/{remote}/content", archive)
@@ -67,6 +69,7 @@ def fetch_nonspeech(keep: bool) -> None:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(z.read(info))
                 n += 1
+        done.touch()
         print(f"  extracted {n} clips")
         if not keep:
             archive.unlink()
@@ -85,7 +88,10 @@ def fetch_demand(keep: bool) -> None:
         download(f"{DEMAND}/{env}_16k.zip/content", archive)
         with zipfile.ZipFile(archive) as z:
             name = next(n for n in z.namelist() if n.endswith("ch01.wav"))
-            dest.write_bytes(z.read(name))
+            # Through a temp file, so an interrupted write never looks like a finished one.
+            part = dest.with_suffix(".wav.part")
+            part.write_bytes(z.read(name))
+            part.replace(dest)
         if not keep:
             archive.unlink()
             archive.with_suffix(".zip.done").unlink(missing_ok=True)
