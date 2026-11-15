@@ -38,6 +38,8 @@ test('a call at the centre mark is located within a few feet', async ({ page }) 
 
 test('every taped mark is located within 3 ft, without noise', async ({ page }) => {
   await page.getByLabel('Measurement noise').selectOption('0');
+  // X4 is outside the triangle on purpose
+  await page.getByLabel('Callers stand inside the triangle').uncheck();
   const offs = await page.evaluate(async () => {
     const results = [];
     for (const label of ['X1', 'X2', 'X3', 'X4']) {
@@ -53,6 +55,7 @@ test('every taped mark is located within 3 ft, without noise', async ({ page }) 
 
 test('a call on the B–C edge is flagged as two possible spots', async ({ page }) => {
   await page.getByLabel('Measurement noise').selectOption('0');
+  await page.getByLabel('Callers stand inside the triangle').uncheck();
   await page.locator('[data-mark="X3"]').click();
   await expect(page.locator('#venue-result')).toContainText('Two possible spots', { timeout: 5_000 });
   await expect(page.locator('#venue-ambiguous')).toBeVisible();
@@ -67,6 +70,21 @@ test('a 200 ft triangle locates its centre without a false second spot', async (
   const c = await page.evaluate(() => window.serraVenue.calls[0]);
   expect(Math.hypot(c.truth.x - c.fix.x, c.truth.y - c.fix.y) / FT).toBeLessThan(3);
   expect(c.fix.alt).toBeNull();
+});
+
+test('with callers inside the triangle, noisy calls near a node stay inside it', async ({ page }) => {
+  await page.getByLabel('Measurement noise').selectOption('2');
+  const offs = await page.evaluate(async () => {
+    const results = [];
+    for (let i = 0; i < 12; i++) {
+      document.querySelector('[data-mark="X2"]').click();
+      await new Promise((r) => setTimeout(r, 30));
+      const c = window.serraVenue.calls[0];
+      results.push(Math.hypot(c.truth.x - c.fix.x, c.truth.y - c.fix.y));
+    }
+    return results;
+  });
+  for (const m of offs) expect(m / FT).toBeLessThan(4);
 });
 
 test('clicking the floor simulates a call there', async ({ page }) => {

@@ -3,19 +3,56 @@
 // Venue demo (/demo): the live-demo view for three Serranodes on a taped triangle. A call is located
 // by loudness trilateration (lib/venue.ts) and drawn on a floor plan of the triangle.
 //
-// Until the live feed is connected, calls are simulated: click the floor or a taped mark to "blow a
-// whistle" there. With "Show caller" on (rehearsal), the true position is drawn next to the estimate.
+// Calls come live from the base-station decoder (serra-base, over the Pi's USB link) once the Live
+// decoder card is connected, or are simulated: click the floor or a taped mark to "blow a whistle"
+// there. With "Show caller" on (rehearsal), the true position is drawn next to the estimate.
 
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { connectDecoder, createGrouper } from '@/lib/decoder';
 import { useVenue } from '@/lib/venueStore';
 import { SerraLogo } from '../brand/Logos';
 import { Clock } from '../dashboard/TopBar';
 import { SiteNav } from '../SiteNav';
 import { VenueMap } from './VenueMap';
-import { CallLog, ResultCard, SetupCard } from './VenuePanel';
+import { CallLog, LiveCard, ResultCard, SetupCard } from './VenuePanel';
+
+/** Keeps the page connected to the decoder while the Live decoder card is switched on. */
+function useDecoderLink() {
+  const liveOn = useVenue((s) => s.liveOn);
+  const url = useVenue((s) => s.decoderUrl);
+  useEffect(() => {
+    if (!liveOn) return;
+    const v = useVenue.getState();
+    const grouper = createGrouper(
+      (heard) => useVenue.getState().ingest(heard),
+      // close a group early once every corner's node is in (only once all three are known)
+      () => {
+        const s = useVenue.getState();
+        return s.assigned.every(Boolean) ? s.nodeIds : [];
+      },
+    );
+    const stop = connectDecoder(url, {
+      event: (e) => {
+        useVenue.getState().packetSeen();
+        grouper.push(e);
+      },
+      state: v.setLink,
+      health: v.setHealth,
+    });
+    return () => {
+      grouper.reset();
+      stop();
+    };
+  }, [liveOn, url]);
+}
+
+const CHIP = { off: 'connecting', connecting: 'connecting', live: 'live', down: 'lost' } as const;
 
 export function VenueDemo() {
+  useDecoderLink();
+  const liveOn = useVenue((s) => s.liveOn);
+  const link = useVenue((s) => s.link);
   // Read-only handle for the Playwright tests and the browser console.
   useEffect(() => {
     Object.defineProperty(window, 'serraVenue', {
@@ -41,8 +78,16 @@ export function VenueDemo() {
         </Link>
         <SiteNav />
         <div className="chips">
-          <span className="chip">
-            Locating by <b>loudness</b>
+          <span className="chip" id="venue-chip">
+            {liveOn ? (
+              <>
+                Decoder <b>{CHIP[link]}</b>
+              </>
+            ) : (
+              <>
+                Calls <b>simulated</b>
+              </>
+            )}
           </span>
           <span className="chip">
             <Clock />
@@ -53,6 +98,7 @@ export function VenueDemo() {
         <VenueMap />
         <aside className="panel venue-side" aria-label="Located call">
           <ResultCard />
+          <LiveCard />
           <SetupCard />
           <CallLog />
         </aside>

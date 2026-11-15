@@ -25,8 +25,9 @@ export interface VenueFrame {
 
 /** When each stage of a call happens, in seconds after the call. */
 export function callTimeline(layout: VenueLayout, call: VenueCall) {
+  // live calls have no known source: time the nodes from the estimate, or all at once if there is none
   const src = call.truth ?? call.fix;
-  const heardAt = layout.nodes.map((n) => dist(n, src) / SHOWN_SPEED);
+  const heardAt = layout.nodes.map((n) => (src ? dist(n, src) / SHOWN_SPEED : 0));
   const allHeard = Math.max(...heardAt);
   return { heardAt, fixAt: allHeard + RELAY, doneAt: allHeard + RELAY + NARROW };
 }
@@ -139,6 +140,7 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
 
       // earlier fixes, faint
       for (const old of f.calls.slice(1, 6)) {
+        if (!old.fix) continue;
         const [x, y] = P(old.fix);
         c.fillStyle = A(C.flare, 0.25);
         c.beginPath();
@@ -149,9 +151,10 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
       const call = f.calls[0];
       const e = call ? f.t - call.t0 : -1;
       const tl = call ? callTimeline(layout, call) : null;
-      const levels = call ? call.readings.map((r) => r.peak / 10) : [];
-      const loudest = levels.length ? levels.indexOf(Math.max(...levels)) : -1;
-      const quietest = levels.length ? Math.min(...levels) : 0;
+      const levels = call ? call.levels : [];
+      const heardLv = levels.filter((l): l is number => l !== null);
+      const loudest = heardLv.length ? levels.indexOf(Math.max(...heardLv)) : -1;
+      const quietest = heardLv.length ? Math.min(...heardLv) : 0;
 
       // the sound spreading from the caller (simulated calls only: live calls have no known source)
       if (call?.truth && tl && e >= 0 && e < tl.fixAt) {
@@ -168,10 +171,11 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
       }
 
       // the fix: lines from each node, the narrowing circle, the estimate
-      if (call && tl && e >= tl.fixAt) {
+      if (call?.fix && tl && e >= tl.fixAt) {
+        const fix = call.fix;
         const k = Math.min(1, (e - tl.fixAt) / NARROW);
-        const r = call.fix.r * (1 + 2.2 * Math.pow(1 - k, 3)) * S;
-        const [ex, ey] = P(call.fix);
+        const r = fix.r * (1 + 2.2 * Math.pow(1 - k, 3)) * S;
+        const [ex, ey] = P(fix);
         c.setLineDash([2, 4]);
         c.lineWidth = 1;
         layout.nodes.forEach((n, i) => {
@@ -200,25 +204,21 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
         c.arc(ex, ey, 4.5, 0, 7);
         c.fill();
         // the other spot that fits the readings about as well (three nodes can't tell them apart)
-        if (call.fix.alt) {
-          const [qx, qy] = P(call.fix.alt);
+        if (fix.alt) {
+          const [qx, qy] = P(fix.alt);
           c.setLineDash([3, 5]);
           c.strokeStyle = A(C.flare, 0.55);
           c.lineWidth = 1.2;
           c.beginPath();
-          c.arc(qx, qy, call.fix.r * S, 0, 7);
+          c.arc(qx, qy, fix.r * S, 0, 7);
           c.stroke();
           c.setLineDash([]);
           c.fillStyle = A(C.flare, 0.7);
           const q = 'OR HERE?';
           const qw = c.measureText(q).width;
-          c.fillText(
-            q,
-            Math.min(CW - qw - 4, Math.max(4, qx - qw / 2)),
-            Math.max(12, qy - call.fix.r * S - 10),
-          );
+          c.fillText(q, Math.min(CW - qw - 4, Math.max(4, qx - qw / 2)), Math.max(12, qy - fix.r * S - 10));
         }
-        const lbl = `${k < 1 ? 'NARROWING' : 'ESTIMATE'} · ±${toFt(call.fix.r).toFixed(1)} FT`;
+        const lbl = `${k < 1 ? 'NARROWING' : 'ESTIMATE'} · ±${toFt(fix.r).toFixed(1)} FT`;
         const lw = c.measureText(lbl).width;
         c.fillStyle = A(C.night, 0.9);
         c.fillRect(ex - lw / 2 - 6, ey + r + 6, lw + 12, 18);
@@ -230,11 +230,11 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
       monoFont(c, 10.5);
       layout.nodes.forEach((n, i) => {
         const [x, y] = P(n);
-        const heard = call && tl && e >= tl.heardAt[i];
-        const q =
-          levels.length && levels[loudest] > quietest
-            ? (levels[i] - quietest) / (levels[loudest] - quietest)
-            : 1;
+        const lv = levels[i] ?? null;
+        const missed = !!call && lv === null;
+        const heard = !!call && lv !== null && !!tl && e >= tl.heardAt[i];
+        const top = loudest >= 0 ? (levels[loudest] ?? 0) : 0;
+        const q = lv !== null && top > quietest ? (lv - quietest) / (top - quietest) : 1;
         if (heard && i === loudest) {
           c.strokeStyle = C.flare;
           c.lineWidth = 1.5;
@@ -244,6 +244,8 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
           c.fillStyle = C.flare;
         } else if (heard) {
           c.fillStyle = A(C.flare, 0.5 + 0.35 * q);
+        } else if (missed) {
+          c.fillStyle = A(C.moss, 0.45);
         } else {
           const k = (f.t * 0.35 + i * 0.27) % 1;
           c.strokeStyle = A(C.moss, (1 - k) * 0.3);
@@ -261,9 +263,12 @@ export function createVenueRenderer(cv: HTMLCanvasElement) {
         c.textAlign = right ? 'left' : 'right';
         c.fillStyle = C.fog;
         c.fillText(`NODE ${n.label}`, lx, y - 7);
-        if (heard) {
+        if (heard && lv !== null) {
           c.fillStyle = i === loudest ? C.flare : A(C.flare, 0.8 + 0.2 * q);
-          c.fillText(`${levels[i].toFixed(1)} DB · ${i === loudest ? 'LOUDEST' : 'CONFIRMS'}`, lx, y + 8);
+          c.fillText(`${lv.toFixed(1)} DB · ${i === loudest ? 'LOUDEST' : 'CONFIRMS'}`, lx, y + 8);
+        } else if (missed) {
+          c.fillStyle = C.stone;
+          c.fillText('DID NOT REPORT', lx, y + 8);
         } else {
           c.fillStyle = C.moss;
           c.fillText('LISTENING', lx, y + 8);
