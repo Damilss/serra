@@ -77,7 +77,10 @@ static void handle_adv_report(const uint8_t *packet) {
 	uint8_t len = gap_event_advertising_report_get_data_length(packet);
 	const uint8_t *data = gap_event_advertising_report_get_data(packet);
 	int8_t rssi = (int8_t)gap_event_advertising_report_get_rssi(packet);
+	bd_addr_t from;
 	ad_context_t it;
+
+	gap_event_advertising_report_get_address(packet, from);
 
 	for (ad_iterator_init(&it, len, data); ad_iterator_has_more(&it); ad_iterator_next(&it)) {
 		if (ad_iterator_get_data_type(&it) != BLUETOOTH_DATA_TYPE_MANUFACTURER_SPECIFIC_DATA)
@@ -92,7 +95,7 @@ static void handle_adv_report(const uint8_t *packet) {
 		if (little_endian_read_16(mfg, 0) != MESH_COMPANY_ID || mfg[2] != MESH_MAGIC)
 			continue;
 
-		rx_cb(mfg + 2, mfg_len - 2, rssi);
+		rx_cb(mfg + 2, mfg_len - 2, rssi, BLE_TAG(from));
 		return;
 	}
 }
@@ -122,7 +125,7 @@ static void hci_event_handler(uint8_t packet_type, uint16_t channel, uint8_t *pa
 
 		bd_addr_t addr;
 		gap_local_bd_addr(addr);
-		printf("[ble] up, addr %s, scanning\n", bd_addr_to_str(addr));
+		printf("[ble] up, addr %s (tag %04x), scanning\n", bd_addr_to_str(addr), BLE_TAG(addr));
 
 		gap_set_scan_params(BLE_SCAN_PASSIVE, BLE_SCAN_INTERVAL, BLE_SCAN_WINDOW, 0);
 		gap_start_scan();
@@ -197,3 +200,20 @@ int ble_advertise(const void *pkt, uint8_t len) {
 	}
 	return 0;
 }
+
+/**
+ * ble_advertise_stop - turn advertising off
+ */
+void ble_advertise_stop(void) {
+	if (!adv_enabled)
+		return;
+	gap_advertisements_enable(0);
+	adv_enabled = false;
+}
+
+/**
+ * ble_advertising - whether advertising is on
+ *
+ * return: true between ble_advertise() and ble_advertise_stop().
+ */
+bool ble_advertising(void) { return adv_enabled; }
