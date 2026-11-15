@@ -65,9 +65,14 @@ target_compile_definitions(node PRIVATE
     PICO_USE_MALLOC_MUTEX=1
     # at boot, wait up to 3 s for a serial monitor so the startup log isn't lost
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=3000
-    # log every tx-queue switch on serial; noisy, turn off once the mesh is verified
-    TXQ_DEBUG=1
 )
+
+# Optional log of every tx-queue switch (mesh/tx_queue.c). Very noisy, so off by default:
+#   cmake -S firmware -B firmware/build -DSERRA_TXQ_DEBUG=ON
+option(SERRA_TXQ_DEBUG "Log every tx-queue switch on serial" OFF)
+if (SERRA_TXQ_DEBUG)
+    target_compile_definitions(node PRIVATE TXQ_DEBUG=1)
+endif()
 
 target_link_libraries(node
     pico_stdlib            # GPIO, timers, stdio

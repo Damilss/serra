@@ -31,7 +31,7 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 | BLE advertise test with our packet format | **Works on 2 × Pico 2 W (2026-11-14)**: each board advertises a test alert every second and the other decodes it over the air (`[mesh] rx src=...` on serial) |
 | Our firmware (`node.uf2`): `main.c` + `blink_light` + `mesh/` | **Runs on a Pico 2 W**: LED toggles every 1000 ms. All core 0 work runs as `async_context` workers on the cyw43 context; `main.c` loops on `cyw43_arch_poll()` + `cyw43_arch_wait_for_work_until()`. Ported off our own scheduler 2026-11-14 and re-tested on hardware: LED, BLE and mesh tx/rx all work |
 | BTstack (`pico_btstack_ble`, `pico_btstack_cyw43`) + `btstack_config.h` (BLE only) | Used by `mesh/ble.c`: non-connectable advertising + passive scan, filtered on company ID `0xFFFF` and `MESH_MAGIC` |
-| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, logs received packets. Dedup, tx queue and relaying are in PR #6, not on this branch yet. The 1 s test beacon in `main.c` is off unless built with `-DSERRA_TEST_BEACON=1` |
+| `mesh/mesh.c` | Node ID from the board ID, random `msg_id` seed, `mesh_send_alert()`, drops duplicate `(src, msg_id)` pairs, shares the advertising slot through `mesh/tx_queue.c` (alerts expire after 5 s) and relays new packets with `ttl - 1` (PR #6). `mesh/console.c` is a serial test console (`h` for help); its fake-alert beacon starts paused (`p` toggles it) so real detections aren't mixed with fake ones |
 | `classifier/` (`serra_classifier`: microfrontend features + int8 model on TensorFlow Lite Micro) + `tools/classifier_bench` | **Runs on a Pico 2 W**: 70.6 ms per inference, 42.9 KB of a 48 KB arena, ~215 KB flash ([measurements](../docs/classifier-interface.md)). Needs a `pico-tflmicro` checkout ([Prerequisites](#prerequisites)). **Not yet linked into `node.uf2`** |
 | Mic + classifier on the node: `audio/listen.c` (core 1) + `runtime/ipc` (core 1 → core 0) | **Works on 3 × Pico 2 W (2026-11-14)**: each node detects whistle / scream / "help", hands the detection to core 0 and broadcasts it; the other nodes decode it. Mic driver, features, model and TFLM wrapper from PR #5. [Report](../docs/reports/firmware/2026-11-14-mic-classifier-nodes.md) |
 | `runtime/node_state`, `audio/audio.c` | Empty placeholders |
@@ -176,9 +176,10 @@ picotool load -f -x firmware/tools/classifier_bench/build/classifier_bench.uf2
 
 ## Next steps
 
-1. **Merge PR #6 (mesh) and PR #5 (classifier), then rebase `feat/audio` onto them.** One build then listens, classifies, dedups and relays, and alerts expire after 5 s instead of repeating forever.
-2. **End-to-end with relaying and the base station:** a whistle at one node, relayed by another, decoded on the Pi (PR #7).
-3. **Calibration:** per-node `peak_level` offsets (`LISTEN_CALIB_DB_X10` in `audio/listen.c`), and an answer on positive peak levels from the classifier side.
+1. **Hardware test of the combined build** (mic + classifier + dedup + tx queue + relaying): a whistle at one node, relayed by another, received by a third.
+2. **End-to-end with the base station** (`base-station/`, PR #7): a whistle at a node, decoded on the Pi.
+3. **Location check with calibration:** per-node offsets are in `calib_table` in `audio/listen.c` (measured 2026-11-14); the node closest to a sound should report the highest `peak_level`.
+4. **Heartbeat payload:** agree it with the base station and app (the app currently proposes battery and millivolts).
 
 ---
 
