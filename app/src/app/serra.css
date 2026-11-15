@@ -1885,3 +1885,34 @@ input[type='range'] {
     min-height: 0;
   }
 }
+
+/* ───────────── Venue demo: live decoder card ───────────── */
+.venue-row {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.venue-block > .venue-row:first-child {
+  justify-content: space-between;
+}
+.pill.ok i {
+  background: var(--fog);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fog) 18%, transparent);
+}
+#venue-url {
+  flex: 1;
+  min-width: 180px;
+}
+#venue-nodes select {
+  background: var(--night);
+  color: var(--fog);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  padding: 4px 6px;
+  font: 500 12px/1.2 var(--font-mono);
+}
+#venue-nodes select {
+  max-width: 100%;
+}
+#venue-nodes td:nth-child(2) {
+  padding-right: 10px;
+}

@@ -11,7 +11,7 @@ export const toFt = (m: number) => m / FT;
 
 export interface VenueNode extends MapPoint {
   label: 'A' | 'B' | 'C';
-  /** u16 mesh ID. Placeholders until firmware prints the real ones at boot. */
+  /** u16 mesh ID (the packet's src). */
   nodeId: number;
 }
 
@@ -31,15 +31,18 @@ export interface VenueLayout {
 const MARGIN = 1.6;
 
 /**
- * Equilateral triangle with A bottom-left, B bottom-right, C at the top. Node IDs are placeholders;
- * swap in the real ones (and real measured positions, if the triangle isn't perfect) at the venue.
+ * Equilateral triangle with A bottom-left, B bottom-right, C at the top. The default node IDs are the
+ * decoder simulator's (serra-base --source sim, and npm run mock:decoder); the live panel assigns the
+ * real ones as the Serranodes are heard.
  */
-export function makeLayout(sideFt = 20): VenueLayout {
+export const DEFAULT_NODE_IDS = [0x1c4e, 0x2a10, 0x3b7f];
+
+export function makeLayout(sideFt = 20, nodeIds: number[] = DEFAULT_NODE_IDS): VenueLayout {
   const s = sideFt * FT;
   const h = (s * Math.sqrt(3)) / 2;
-  const A = { label: 'A' as const, nodeId: 0x1c4e, x: MARGIN, y: MARGIN + h };
-  const B = { label: 'B' as const, nodeId: 0x7b02, x: MARGIN + s, y: MARGIN + h };
-  const C = { label: 'C' as const, nodeId: 0x3a7f, x: MARGIN + s / 2, y: MARGIN };
+  const A = { label: 'A' as const, nodeId: nodeIds[0], x: MARGIN, y: MARGIN + h };
+  const B = { label: 'B' as const, nodeId: nodeIds[1], x: MARGIN + s, y: MARGIN + h };
+  const C = { label: 'C' as const, nodeId: nodeIds[2], x: MARGIN + s / 2, y: MARGIN };
   const centre = { x: (A.x + B.x + C.x) / 3, y: (A.y + B.y + C.y) / 3 };
   const mid = (p: MapPoint, q: MapPoint, k = 0.5) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
   return {
@@ -72,6 +75,29 @@ const TIE_DB2 = 1;
 const BASIN_DB2 = 0.25;
 /** The grid never gets finer than this many cells across, so a 200 ft triangle stays fast. */
 const MAX_CELLS = 400;
+/**
+ * With insideOnly, squared error added per metre a spot lies outside the taped triangle, dB²/m.
+ * Near a node, noise can make a "mirror" spot just outside the triangle fit slightly better than the
+ * real one; this nudge keeps the estimate inside when the two are close calls. In simulation it cut the
+ * worst miss at ±1 dB from 7.4 ft to 2.6 ft on a 20 ft triangle. Calls really made outside get pulled
+ * to the edge, so it can be switched off.
+ */
+const OUTSIDE_DB2_PER_M = 1;
+
+/** How far `p` lies outside the triangle `tri`, metres (0 inside). */
+function outsideBy(tri: MapPoint[], p: MapPoint) {
+  let inside = true;
+  let nearest = Infinity;
+  for (let i = 0; i < 3; i++) {
+    const [a, b, c] = [tri[i], tri[(i + 1) % 3], tri[(i + 2) % 3]];
+    const side = (q: MapPoint) => (b.x - a.x) * (q.y - a.y) - (b.y - a.y) * (q.x - a.x);
+    if (Math.sign(side(p)) !== Math.sign(side(c))) inside = false;
+    const len2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / len2));
+    nearest = Math.min(nearest, Math.hypot(p.x - a.x - t * (b.x - a.x), p.y - a.y - t * (b.y - a.y)));
+  }
+  return inside ? 0 : nearest;
+}
 
 /** One node's reading of a call: peak_level as on the wire, tenths of a dB. */
 export interface VenueReading {
@@ -126,9 +152,15 @@ export interface Fix extends MapPoint {
  * fit about as well as the best, the one needing the quietest caller wins, and the runner-up is
  * reported as `alt` so the UI can say it can't tell them apart.
  *
+ * With `insideOnly`, spots outside the taped triangle score slightly worse (see OUTSIDE_DB2_PER_M).
+ *
  * Needs no clock sync: only peak levels, which the firmware already sends.
  */
-export function trilaterate(layout: VenueLayout, readings: VenueReading[], step = 0.05, slackDb2 = 3): Fix {
+export function trilaterate(
+  layout: VenueLayout,
+  readings: VenueReading[],
+  { insideOnly = false, step = 0.05, slackDb2 = 3 } = {},
+): Fix {
   const levels = readings.map((r) => r.peak / 10);
   const nodes = readings.map((r) => layout.nodes[r.node]);
   step = Math.max(step, Math.max(layout.width, layout.height) / MAX_CELLS);
@@ -143,6 +175,7 @@ export function trilaterate(layout: VenueLayout, readings: VenueReading[], step 
     const loss = nodes.map((n) => spread(dist(n, p)));
     const l0 = levels.reduce((s, v, i) => s + v + loss[i], 0) / levels.length;
     err[k] = levels.reduce((s, v, i) => s + (v - (l0 - loss[i])) ** 2, 0);
+    if (insideOnly) err[k] += OUTSIDE_DB2_PER_M * outsideBy(layout.nodes, p);
     l0s[k] = l0;
     minErr = Math.min(minErr, err[k]);
   }

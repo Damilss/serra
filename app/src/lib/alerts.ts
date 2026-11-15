@@ -105,7 +105,9 @@ export function makeAlert(src: number, o: AlertOptions = {}): Alert {
     dur: arrival[0] + 1.6,
     heard,
     hops: dist[0],
-    est: { x: wx / ws, y: wy / ws, r: 80 + 55 * heard.length },
+    // search radius grows with how many nodes heard it (a louder call spreads farther):
+    // 2 nodes 56 m, 3 nodes 74 m, 4 nodes 92 m, 5 nodes 110 m
+    est: { x: wx / ws, y: wy / ws, r: 20 + 18 * heard.length },
     conf: o.conf ?? +(0.86 + rnd() * 0.11).toFixed(2),
     start: o.start ?? now(),
     wall: o.wall ?? new Date(),

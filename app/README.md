@@ -4,7 +4,7 @@ The web app rescuers use at the base station. It runs on the demo laptop, with n
 
 Built with **Next.js 16** (App Router), **React 19**, **TypeScript**, **Tailwind CSS 4** and **Zustand**.
 
-> **Status:** the dashboard runs on a **mock feed**. Alerts, heartbeats and packets are simulated in the browser to match the real wire format. Connecting it to the local Supabase database (fed by the base-station decoder) is the next step; see [Connecting live data](#connecting-live-data).
+> **Status:** the dashboard runs on a **mock feed**. Alerts, heartbeats and packets are simulated in the browser to match the real wire format. Connecting it to the local Supabase database (fed by the base-station decoder) is the next step; see [Connecting live data](#connecting-live-data). The **venue demo** (`/demo`) already runs live from the decoder; see [Live from the Serranodes](#live-from-the-serranodes).
 
 ---
 
@@ -101,10 +101,23 @@ Error grows with the triangle: at 200 ft per side, ±1 dB gives about 9 ft.
 - **Measurement noise:** sets how much the simulated readings wobble.
 - **Triangle side:** change it if the venue forces a different size.
 
-**For the live demo:**
+- **Callers stand inside the triangle** (on by default): spots outside the tape score slightly worse. Near a node, noise can make a "mirror" spot just outside the triangle look a little better than the real one, and this keeps the estimate inside. In simulation at ±1 dB it cut the worst miss from 7.4 ft to 2.6 ft. Turn it off to demo a call outside the triangle (X4); otherwise those get pulled to the edge.
 
-- Replace the placeholder node IDs in `makeLayout()` (`lib/venue.ts`) with the real ones each Pico prints at boot.
-- Feed real readings to `useVenue.getState().addCall(readings)`. Each reading is `{ node: 0 | 1 | 2, peak: peak_level }`.
+### Live from the Serranodes
+
+The page connects straight to the base-station decoder (`serra-base` on the Pi, branch `base-station`), which serves every decoded packet on `GET /events` and its status on `GET /health`. No Supabase is needed for the demo.
+
+1. **Plug in the Pi** over USB and check it: `curl http://10.12.194.1:8080/health` should show `"source": "ble"` and `"scanner": "up"` (see `docs/receiving-packets-on-laptop.md` on the `base-station` branch).
+2. **Open `/demo`**, and in **Live decoder** press **Pi over USB**. The pill turns **Live** and the top bar says **Decoder live**. The address, node IDs and calibration are remembered in this browser.
+3. **Assign the corners.** New Serranodes fill A, B, C in the order they're first heard (the default IDs are the simulator's). Whistle right next to node A: it should read loudest. If not, pick the right mesh ID for each corner from the dropdowns.
+4. **Calibrate.** Stand on X1 (the centre, equally far from all three), whistle, then press **Calibrate at X1**. Each node gets the offset that brings it to the three's average, which evens out the microphones.
+5. **Demo.** Turn off "Show where the caller really was". Each whistle, scream or "help" becomes one call: alerts from different nodes within 2 s are grouped (by the Pi's clock, `t_ms`), each node's loudest alert is its reading, and the call is located once all three nodes have reported. If only one or two report, the call is logged as "Heard by A only" (or "A + B") and not located.
+
+**How it's wired:** `lib/decoder.ts` opens the SSE stream with `EventSource`, polls `/health` every 3 s, and groups ALERT events into calls. `ingest()` in `lib/venueStore.ts` maps each `src` to a corner, applies the calibration, and runs `trilaterate()`. If the stream drops, the page reconnects after 2 s **without** resuming: a resume would replay buffered packets as if they were new calls.
+
+**Rehearsing without the Pi:** `npm run mock:decoder` serves the same `/events` and `/health` on `localhost:8080`, with three nodes (`0x1C4E`, `0x2A10`, `0x3B7F`) reporting a call at a random spot every 4 s; it prints where each call really was. Then press **This laptop** on `/demo`. Options: `--at X1` (always the centre, to try Calibrate), `--skew 0,2.5,-1.5` (uneven microphones, dB), `--miss 0.2` (each node misses 20% of calls), `--noise 2`, `--interval 6`, `--port 8081`. Run options go after `--`: `npm run mock:decoder -- --at X1`. `uv run serra-base --source sim` (in `base-station/`) works too, but each of its alerts comes from a single node, so its calls show as "heard by one node".
+
+**Stage fallback:** if the Pi fails, run `uv run serra-base --source ble` on the laptop and press **This laptop**.
 
 ## Project structure
 
@@ -125,7 +138,7 @@ app/
 │   │   ├── brand/                logos (Logos.tsx) and their SVG path data (paths.ts)
 │   │   ├── SiteNav.tsx           Field / Venue demo tabs
 │   │   ├── welcome/              Welcome, WelcomeCanvas (animated topo), BootLog
-│   │   ├── demo/                 VenueDemo (page shell), VenueMap (floor plan), VenuePanel (result, setup, log)
+│   │   ├── demo/                 VenueDemo (page shell, decoder link), VenueMap (floor plan), VenuePanel (result, live decoder, setup, log)
 │   │   └── dashboard/            Dashboard (shell + loops) and one file per panel:
 │   │                             TopBar, Stats, AlertCard, Picker, MapView, ReplayBar,
 │   │                             Feed, PacketView, NodePanel, PicoBoard, Waveform, Rescuer
@@ -133,7 +146,8 @@ app/
 │       ├── types.ts              the data contract: nodes, alerts, readings, packets
 │       ├── store.ts              field dashboard state and actions (Zustand)
 │       ├── venue.ts              venue triangle layout, call simulator, loudness trilateration
-│       ├── venueStore.ts         venue demo state (layout, located calls)
+│       ├── decoder.ts            live link to serra-base: SSE stream, /health, grouping alerts into calls
+│       ├── venueStore.ts         venue demo state (layout, calls, node IDs, calibration, link)
 │       ├── geo.ts                node layout, mesh links, routing, coordinates, bearings
 │       ├── sound.ts              sound model: dB at distance, wake trigger
 │       ├── alerts.ts             alert classes, the mock alert generator, summary text
@@ -147,7 +161,7 @@ app/
 │       └── utils.ts              cn() for Tailwind class names (shadcn/ui)
 ├── tests/e2e/                    Playwright tests
 ├── supabase/                     local database: schema, seed data (see supabase/README.md)
-├── scripts/                      git hook helpers, gitleaks wrapper
+├── scripts/                      git hook helpers, gitleaks wrapper, mock-decoder.mjs (rehearse /demo without the Pi)
 ├── .husky/                       repo-wide git hooks
 ├── components.json               shadcn/ui config
 ├── next.config.ts, tsconfig.json, postcss.config.mjs, eslint.config.js, playwright.config.js
@@ -287,6 +301,7 @@ Mock today:
 
 - the welcome and loading screens;
 - the venue demo: the Field / Venue demo tabs, the triangle's size, and the accuracy at each taped mark;
+- the venue demo live: each test runs a stand-in decoder and checks grouping, corner assignment, partial calls, calibration and disconnecting;
 - that a call on the B–C edge gets flagged as two possible spots, and a 200 ft triangle locates its centre;
 - the node picker, simulating, acknowledging and resolving alerts, and replay;
 - the packet view's bytes against the firmware's wire format;

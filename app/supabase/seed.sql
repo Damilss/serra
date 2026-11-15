@@ -20,8 +20,8 @@ with a as (
 	insert into public.alerts (src_node_id, msg_id, class, confidence, peak_level, blast_count, hops, latency_ms,
 		node_uptime_ms, est_lat, est_lon, search_radius_m, summary, status, note, received_at, acknowledged_at, resolved_at)
 	values (21190, 286, 'whistle', 0.62, 898, 3, 4, 446,
-		21400000, 35.32776, -120.66153, 245,
-		'Repeated distress whistle, likely 3 blasts, heard first and loudest by Serranode 05 · Ridge Camp (89.8 dB) at 09:12. 2 nearby Serranodes confirmed it more quietly (59.3 dB, 50.2 dB), narrowing the search to about 250 m around grid G2.',
+		21400000, 35.32776, -120.66153, 74,
+		'Repeated distress whistle, likely 3 blasts, heard first and loudest by Serranode 05 · Ridge Camp (89.8 dB) at 09:12. 2 nearby Serranodes confirmed it more quietly (59.3 dB, 50.2 dB), narrowing the search to about 70 m around grid G2.',
 		'resolved', 'Resolved. Bird call, false positive.', date_trunc('day', now()) + interval '9 hours 12 minutes 44 seconds',
 		date_trunc('day', now()) + interval '9 hours 13 minutes 20 seconds', date_trunc('day', now()) + interval '9 hours 21 minutes 5 seconds')
 	returning id
