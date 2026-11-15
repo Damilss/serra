@@ -53,7 +53,7 @@ int main(void) {
 		return 1;
 	}
 
-	/* serial test console (a/b/u/p/s/h); its fake-alert beacon starts paused */
+	/* serial test console (a/b/u/s/h); sends nothing unless a command is typed */
 	if (console_init()) {
 		printf("[main] console_init failed\n");
 		return 1;
