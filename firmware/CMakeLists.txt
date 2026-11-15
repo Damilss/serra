@@ -44,6 +44,14 @@ add_executable(node
     runtime/ipc.c
 )
 
+# Optional once-a-second mic level line on serial (audio/listen.c), for checking mic
+# wiring and for the reference-tone calibration:
+#   cmake -S firmware -B firmware/build -DSERRA_LISTEN_DEBUG=ON
+option(SERRA_LISTEN_DEBUG "Print the mic level once a second" OFF)
+if (SERRA_LISTEN_DEBUG)
+    target_compile_definitions(node PRIVATE LISTEN_DEBUG=1)
+endif()
+
 # PIO program for the INMP441 (I2S) -> i2s_mic.pio.h for audio/mic.c.
 pico_generate_pio_header(node ${CMAKE_CURRENT_LIST_DIR}/audio/i2s_mic.pio)
 

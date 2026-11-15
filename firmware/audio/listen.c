@@ -10,6 +10,7 @@
 #include <stdio.h>
 
 #include "classifier.h"
+#include "mesh/mesh.h"
 #include "mic.h"
 #include "pico/multicore.h"
 #include "pico/stdlib.h"
@@ -26,12 +27,57 @@
 #define LISTEN_PIN_SCK 3
 
 /**
- * LISTEN_CALIB_DB_X10 - this node's peak-level calibration, tenths of a dB
+ * LISTEN_CALIB_TARGET_DB_X10 - what the reference tone should read on every node
  *
- * TODO: per-node offsets from the reference-tone calibration (README "Peak
- * level and calibration"). 0 means peak_level is raw dBFS.
+ * 80.0 dB, per README "Peak level and calibration" and the app's dB scale.
  */
-#define LISTEN_CALIB_DB_X10 0
+#define LISTEN_CALIB_TARGET_DB_X10 800
+
+/**
+ * listen_calib_t - one node's peak-level calibration
+ * @node_id: the node, as mesh_node_id() reports it (also printed at boot)
+ * @offset_db_x10: added to every level on that node, tenths of a dB
+ *
+ * node IDs come from each RP2350's factory-burned unique ID, so they're fixed
+ * per board across reflashes. if node_id_from_board() in mesh.c ever changes
+ * how it folds that ID, these entries must be updated.
+ */
+typedef struct listen_calib {
+	uint16_t node_id;
+	int16_t offset_db_x10;
+} listen_calib_t;
+
+/**
+ * calib_table - per-node offsets, measured in the demo room
+ *
+ * how to measure: build with -DSERRA_LISTEN_DEBUG=ON, play a steady reference
+ * tone from a phone at a fixed distance (e.g. 50 cm) and volume in front of
+ * each node in turn, and read the "level=" on its debug line. then
+ *   new offset = current offset + (LISTEN_CALIB_TARGET_DB_X10 - level)
+ * so the tone reads 80.0 dB on every node.
+ *
+ * TODO: all 0 until measured. 0x2d9a's mic sends a raw bitstream and reads much
+ * hotter than the two I2S mics, so its offset will be the most negative.
+ */
+static const listen_calib_t calib_table[] = {
+	{0x0b16, 0},
+	{0x2d9a, 0},
+	{0xed70, 0},
+};
+
+/**
+ * calib_offset - this node's calibration offset
+ * @node_id: this node's ID
+ *
+ * return: the table entry for @node_id, or 0 (uncalibrated) for a node not in it.
+ */
+static int16_t calib_offset(uint16_t node_id) {
+	for (size_t i = 0; i < sizeof(calib_table) / sizeof(calib_table[0]); i++) {
+		if (calib_table[i].node_id == node_id)
+			return calib_table[i].offset_db_x10;
+	}
+	return 0;
+}
 
 /**
  * LISTEN_CHUNK - samples read from the mic per loop pass (16 ms of audio)
@@ -58,8 +104,8 @@
  *
  * for checking mic wiring: a working mic shows a small noise floor that jumps on a
  * clap; a raw_peak stuck at 0 means no audio is arriving (wiring, solder, power).
- * off by default; build with -DLISTEN_DEBUG=1 (e.g. in CMakeLists.txt's
- * target_compile_definitions) to turn it on.
+ * off by default; configure with -DSERRA_LISTEN_DEBUG=ON to turn it on (also used for
+ * calibration, see calib_table).
  */
 #ifndef LISTEN_DEBUG
 #define LISTEN_DEBUG 0
@@ -151,7 +197,12 @@ static void core1_main(void) {
 
 	multicore_lockout_victim_init();
 
-	if (!classifier_init(LISTEN_CALIB_DB_X10)) {
+	uint16_t node_id = mesh_node_id();
+	int16_t offset = calib_offset(node_id);
+
+	printf("[listen] node 0x%04x calibration offset %d (tenths of a dB)\n", node_id, offset);
+
+	if (!classifier_init(offset)) {
 		printf("[listen] classifier_init failed, core 1 idle; node still relays\n");
 		for (;;)
 			__wfe();
