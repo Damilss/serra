@@ -472,7 +472,8 @@ serra/
 ├── base-station/            # Pi 5: BLE listener, decoder, dedup -> writes to Supabase
 ├── app/                     # laptop: Supabase + map dashboard, optional Ollama LLM
 ├── scripts/
-│   ├── install-firmware-tooling.sh  # toolchain + Pico SDK + pico-tflmicro setup (macOS, apt Linux)
+│   ├── install-app-tooling.sh       # Node, npm packages, Playwright, gitleaks, Docker (macOS, apt Linux)
+│   ├── install-firmware-tooling.sh  # toolchain + Pico SDK setup (macOS, apt Linux)
 │   └── pico_setup.sh        # Raspberry Pi's full SDK/OpenOCD setup on the Pi 5
 ├── docs/
 │   ├── classifier-interface.md  # model -> firmware handoff: mic, runtime, C API, budgets
