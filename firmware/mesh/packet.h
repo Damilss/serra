@@ -23,9 +23,9 @@
 /**
  * MESH_MAGIC - first byte of every Serranet packet
  *
- * lets a node ignore every other BLE device's advertisements. any value
- * works as long as nodes and the base station agree.
- * TODO: confirm with the base-station side (placeholder).
+ * lets a node ignore every other BLE device's advertisements. pinned: the
+ * base station's protocol.py has the same value, and its tests read this
+ * file and fail if the two differ.
  */
 #define MESH_MAGIC 0x5E
 
@@ -47,7 +47,9 @@
 /**
  * MESH_TTL_DEFAULT - hops a new packet may travel before relays drop it
  *
- * TODO: tune for the demo layout (placeholder; 3-5 covers 3-4 nodes).
+ * the base station mirrors this as TTL_INITIAL (hops = TTL_INITIAL - ttl),
+ * and its tests fail if the two differ: change both together.
+ * TODO: tune for the demo layout (3-5 covers 3-4 nodes).
  */
 #define MESH_TTL_DEFAULT 4
 

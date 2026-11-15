@@ -48,8 +48,13 @@ class RepeatFilter:
         self._last[addr] = (bytes(data), self._clock())
 
 
-async def scan(company_id: int = COMPANY_ID) -> AsyncIterator[Advert]:
+async def scan(
+    company_id: int = COMPANY_ID, on_state: Callable[[str], None] = lambda state: None
+) -> AsyncIterator[Advert]:
     """Yield each new advertisement carrying manufacturer data under `company_id`.
+
+    `on_state` hears "starting" while the scanner (re)starts and "up" once it runs, for
+    /health. A failure raises (BleakError, OSError); the caller reports it as "down".
 
     Repeats of the last bytes from the same address are passed on at most every
     REPEAT_REFRESH_S, enough to keep dedup refreshed. Backends report the same
@@ -80,7 +85,9 @@ async def scan(company_id: int = COMPANY_ID) -> AsyncIterator[Advert]:
             return
         repeats.record(device.address, data)
 
+    on_state("starting")
     async with BleakScanner(detection_callback=on_advert) as scanner:  # active by default
+        on_state("up")
         while True:
             try:
                 adv = await asyncio.wait_for(queue.get(), timeout=SILENCE_S)
@@ -88,8 +95,10 @@ async def scan(company_id: int = COMPANY_ID) -> AsyncIterator[Advert]:
                 if time.monotonic() - heard >= SILENCE_S:
                     # A healthy adapter restarts and BlueZ re-reports nearby devices; a
                     # missing or powered-off one raises BleakError here.
+                    on_state("starting")
                     await scanner.stop()
                     await scanner.start()
+                    on_state("up")
                     heard = time.monotonic()
                 continue
             yield adv

@@ -14,6 +14,8 @@ def to_event(pkt: Packet, *, run_id: str, seq: int, t_ms: int, rssi: int | None)
         "raw": pkt.raw.hex(),
         "magic": pkt.magic,
         "src": pkt.src,
+        "node_id": pkt.src,
+        "node_hex": f"0x{pkt.src:04X}",
         "dst": pkt.dst,
         "msg_id": pkt.msg_id,
         "ttl": pkt.ttl,

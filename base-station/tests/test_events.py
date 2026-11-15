@@ -30,6 +30,8 @@ def test_readme_example():
         "raw": "5e4e1cffff1e010101019e5503c089460103",
         "magic": 94,
         "src": 7246,
+        "node_id": 7246,
+        "node_hex": "0x1C4E",
         "dst": 65535,
         "msg_id": 286,
         "ttl": 1,
@@ -52,6 +54,8 @@ def test_readme_example():
         "raw",
         "magic",
         "src",
+        "node_id",
+        "node_hex",
         "dst",
         "msg_id",
         "ttl",
@@ -70,6 +74,8 @@ def test_heartbeat_has_no_alert():
     assert event["hops"] == 0
     assert event["rssi"] is None
     assert event["raw"] == "5e0100ffff0100040200"
+    assert event["node_id"] == 1
+    assert event["node_hex"] == "0x0001"
 
 
 def test_json_serialisable():

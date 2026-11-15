@@ -1,0 +1,34 @@
+# serra-base: the Serranet decoder on the base-station Pi 5.
+#
+# A template: deploy/setup-pi.sh fills in @USER@ and @BASE_DIR@ and installs the
+# result as /etc/systemd/system/serra-base.service. Don't copy it by hand.
+# `sudo deploy/setup-pi.sh --uninstall` removes it again.
+#
+# Starts on boot and restarts if it crashes. Losing Bluetooth doesn't stop it:
+# serra-base keeps serving /health (scanner "down") and retries the adapter itself.
+# Every raw advert is appended to captures/live.ndjson. The NDJSON events on stdout
+# are dropped (the capture has everything); counters and errors on stderr go to the
+# journal: journalctl -u serra-base -f
+
+[Unit]
+Description=Serra base station (Serranet BLE decoder, SSE on :8080)
+Wants=bluetooth.target
+After=bluetooth.target network.target
+
+[Service]
+Type=simple
+User=@USER@
+SupplementaryGroups=bluetooth
+WorkingDirectory=@BASE_DIR@
+# The venv's entry point, not `uv run`: in gadget mode the Pi has no internet.
+ExecStart=@BASE_DIR@/.venv/bin/serra-base --source ble --record captures/live.ndjson
+Restart=always
+RestartSec=2
+StandardOutput=null
+StandardError=journal
+# SIGINT is serra-base's clean shutdown (final counters line, capture closed).
+KillSignal=SIGINT
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

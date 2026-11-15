@@ -34,7 +34,7 @@ The README's repository layout is the plan. Folders marked *planned* don't exist
 |---|---|
 | `firmware/` | Pico 2 W node: C on the Pico SDK 2.3.1, split into `runtime/`, `audio/`, `classifier/` and `mesh/`. Build docs in [`firmware/README.md`](firmware/README.md). |
 | `model/` *(planned)* | Classifier training pipeline (Python, uv) |
-| `base-station/` *(planned)* | Pi 5 BLE listener, decoder and dedup (Python); writes alerts to the app's Supabase |
+| `base-station/` | Pi 5 BLE listener, decoder and dedup (Python, uv); serves decoded events over SSE to the app. Contract and setup in [`base-station/README.md`](base-station/README.md) |
 | `app/` *(planned)* | Laptop-hosted app: Supabase, the map dashboard and the optional local LLM |
 | `docs/` | Longer write-ups: wiring, measurements, protocol notes, diagrams |
 | `docs/refs/` | Reference material: datasheets, papers, specs, grouped by area (`docs/refs/firmware/`). Prefer a link plus notes; only commit a third-party PDF if its license allows redistribution. |
