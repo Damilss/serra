@@ -12,10 +12,11 @@ Everything is little-endian.
 import struct
 from dataclasses import dataclass
 
-MAGIC = 0x5E
-COMPANY_ID = 0xFFFF
-DST_BROADCAST = 0xFFFF
-TTL_INITIAL = 4
+# Pinned to packet.h; tests/test_protocol.py reads that file and fails if any differ.
+MAGIC = 0x5E  # MESH_MAGIC
+COMPANY_ID = 0xFFFF  # MESH_COMPANY_ID
+DST_BROADCAST = 0xFFFF  # MESH_DST_BROADCAST
+TTL_INITIAL = 4  # MESH_TTL_DEFAULT: the ttl every packet starts with, so hops = 4 - ttl
 
 TYPE_ALERT = 1
 TYPE_HEARTBEAT = 2

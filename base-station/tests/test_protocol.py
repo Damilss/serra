@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -101,3 +102,38 @@ def test_heartbeat_payload_passed_through() -> None:
 
 def test_unknown_class_name() -> None:
     assert protocol.Alert(9, 0, 0, 0, 0).class_name == "unknown_9"
+
+
+PACKET_H = Path(__file__).resolve().parents[2] / "firmware" / "mesh" / "packet.h"
+
+# packet.h name -> protocol.py value. TTL_INITIAL is the firmware's MESH_TTL_DEFAULT: the ttl
+# every packet starts with, so hops = TTL_INITIAL - ttl.
+PINNED = {
+    "MESH_MAGIC": protocol.MAGIC,
+    "MESH_COMPANY_ID": protocol.COMPANY_ID,
+    "MESH_DST_BROADCAST": protocol.DST_BROADCAST,
+    "MESH_TTL_DEFAULT": protocol.TTL_INITIAL,
+    "MESH_TYPE_ALERT": protocol.TYPE_ALERT,
+    "MESH_TYPE_HEARTBEAT": protocol.TYPE_HEARTBEAT,
+    "CLASS_WHISTLE": protocol.CLASS_WHISTLE,
+    "CLASS_SCREAM": protocol.CLASS_SCREAM,
+    "CLASS_HELP": protocol.CLASS_HELP,
+}
+
+
+def _firmware_constants() -> dict[str, int]:
+    """`#define NAME value` and `NAME = value,` (enum members) from packet.h."""
+    text = PACKET_H.read_text()
+    found = re.findall(r"^#define\s+(\w+)\s+(0x[0-9A-Fa-f]+|\d+)\b", text, re.M)
+    found += re.findall(r"^\s*(\w+)\s*=\s*(0x[0-9A-Fa-f]+|\d+)\s*,", text, re.M)
+    return {name: int(value, 0) for name, value in found}
+
+
+@pytest.mark.skipif(not PACKET_H.exists(), reason="firmware/mesh/packet.h not in this checkout")
+@pytest.mark.parametrize("name", PINNED)
+def test_constants_match_firmware(name: str) -> None:
+    # The wire constants are pinned to the firmware: change one side, this fails until the
+    # other side changes too (CONTRIBUTING's packet-format contract).
+    firmware = _firmware_constants()
+    assert name in firmware, f"{name} not found in {PACKET_H}"
+    assert firmware[name] == PINNED[name], f"{name}: firmware {firmware[name]:#x}"

@@ -112,15 +112,14 @@ The classifier's TensorFlow Lite Micro comes from a pinned [pico-tflmicro](https
 ```
 Base station: Pi 5 (USB gadget)                  App: laptop (localhost)
 +--------------------------------+  USB-C link  +------------------------------------------+
-| BLE scanner (bleak)            |  Ethernet    | Supabase (Postgres, Docker)              |
-|  -> packet decoder             |  over USB    |  -> Realtime -> web dashboard (map)      |
-|  -> dedup by (src, msg_id)     | -----------> |                                          |
-|  -> event grouping             |              | optional: Ollama LLM summaries (~9B)     |
-|  -> writes rows (service_role) |              |                                          |
+| BLE scanner (bleak)            |  Ethernet    | ingest: pulls /events, groups alerts     |
+|  -> packet decoder             |  over USB    |  -> Supabase (Postgres, Docker)          |
+|  -> dedup by (src, msg_id)     | -----------> |  -> Realtime -> web dashboard (map)      |
+|  -> GET /events (SSE), /health |              | optional: Ollama LLM summaries (~9B)     |
 +--------------------------------+              +------------------------------------------+
 ```
 
-The Pi 5 runs in **USB gadget mode** on its USB-C port: plugged into the laptop it shows up as a USB Ethernet adapter, so the two have a private point-to-point network with no Wi-Fi or router involved. The same cable powers the Pi. The BLE listener on the Pi writes to the laptop's Supabase over that link; everything else (database, dashboard, LLM) is the app, lives on the laptop and is opened at `localhost`.
+The Pi 5 runs in **USB gadget mode** on its USB-C port: plugged into the laptop it shows up as a USB Ethernet adapter, so the two have a private point-to-point network with no Wi-Fi or router involved. The same cable powers the Pi. The decoder on the Pi serves decoded packets as an event stream over that link, and the laptop's ingest pulls them, so the Supabase keys never leave the laptop. Everything after decoding (grouping, database, dashboard, LLM) is the app, lives on the laptop and is opened at `localhost`. The event contract is in [`base-station/README.md`](base-station/README.md#output-event-stream).
 
 ---
 
@@ -390,14 +389,14 @@ The INMP441 sends 24-bit samples MSB-first inside 32-bit I2S slots. With L/R tie
 
 Two separate pieces on two machines, joined by one USB-C cable (see [decision 8](#8-raspberry-pi-5-as-the-base-station)):
 
-- **Base station, Raspberry Pi 5 (`base-station/`):** BLE listener, decoder, dedup and event grouping (Python + `bleak`). Runs in USB gadget mode and writes to Supabase on the laptop over the USB link with the `service_role` key.
-- **App, laptop (`app/`):** Supabase (Postgres + Realtime, in Docker) and the dashboard, both on `localhost`, plus the optional LLM.
+- **Base station, Raspberry Pi 5 (`base-station/`):** BLE listener, decoder and dedup (Python + `bleak` + `aiohttp`). Runs in USB gadget mode and serves the decoded packets on `http://10.12.194.1:8080/events` (Server-Sent Events), with status on `/health`. It holds no Supabase keys.
+- **App, laptop (`app/`):** the ingest that pulls `/events`, groups alerts and writes Supabase (Postgres + Realtime, in Docker), and the dashboard, all on `localhost`, plus the optional LLM.
 
 What it does:
 
 - **Start listen-only.** Scan for BLE advertisements and decode Serranet packets (Python + `bleak`).
 - **Same packet format** as the Picos, including **dedup by `(src, msg_id)`**, since the same alert arrives via several paths.
-- **Group events.** Alerts of the same class from different nodes that arrive within about 2 seconds of each other are treated as one event heard by several nodes. Node timestamps are uptime and aren't compared across nodes.
+- **Group events** (on the laptop). Alerts of the same class from different nodes that arrive within about 2 seconds of each other are treated as one event heard by several nodes. Node timestamps are uptime and aren't compared across nodes.
 - **Dashboard.** A web page served on the laptop at `localhost`, reading Supabase with live updates through Realtime, and showing a map of node positions. Nodes light up when they report a detection, labeled whistle / scream / help; the loudest (calibrated dB) is highlighted as the likely location.
 - **No internet.** The Pi-to-laptop link is USB, and Supabase and the dashboard run locally. Pull the Supabase Docker images before the event; after that it all starts offline.
 - **Optional:** a local model on the laptop (e.g. a ~9B model through Ollama) turns raw alerts into plain language, e.g. *"Repeated distress whistle near node 3, 12:41, likely 3 blasts."* or *"Someone shouted 'help' near node 2, 12:43."*
@@ -469,7 +468,7 @@ serra/
 │   ├── data/                # recordings (large files not committed)
 │   └── train.py
 ├── serra_brand/         # Serra brand kit: logos (SVG/PNG), brand PDF, colors, type
-├── base-station/            # Pi 5: BLE listener, decoder, dedup -> writes to Supabase
+├── base-station/            # Pi 5: BLE listener, decoder, dedup -> serves events over SSE
 ├── app/                     # laptop: Supabase + map dashboard, optional Ollama LLM
 ├── scripts/
 │   ├── install-app-tooling.sh       # Node, npm packages, Playwright, gitleaks, Docker (macOS, apt Linux)

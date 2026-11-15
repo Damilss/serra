@@ -1,6 +1,7 @@
 """BLE source tests with a fake scanner: no Bluetooth adapter needed."""
 
 import asyncio
+import contextlib
 from types import SimpleNamespace
 
 from serra_base import protocol
@@ -154,3 +155,31 @@ def test_changed_bytes_pass_immediately(monkeypatch):
     ]
     adverts = _scan_script(monkeypatch, script)
     assert [a.t_ms for a in adverts] == [0, 1000]
+
+
+def test_reports_scanner_state(monkeypatch):
+    # /health's "scanner" field: starting while the scanner comes up, up once it runs, and
+    # starting/up again around a silence restart.
+    clock = FakeClock()
+    states: list[str] = []
+    FakeScanner.instance = None
+    monkeypatch.setattr(ble, "BleakScanner", FakeScanner)
+    monkeypatch.setattr(ble, "time", SimpleNamespace(monotonic=clock))
+    monkeypatch.setattr(ble, "SILENCE_S", 0.05)
+
+    async def drive() -> None:
+        gen = ble.scan(on_state=states.append)
+        pending = asyncio.ensure_future(anext(gen))
+        while FakeScanner.instance is None:
+            await asyncio.sleep(0)
+        assert states == ["starting", "up"]
+        clock.now = 1.0  # nothing heard for longer than SILENCE_S: the scan restarts
+        while len(states) < 4:
+            await asyncio.sleep(0.01)
+        pending.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await pending
+        await gen.aclose()
+
+    asyncio.run(drive())
+    assert states == ["starting", "up", "starting", "up"]
