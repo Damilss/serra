@@ -1,11 +1,12 @@
 'use client';
 
-// Venue demo (/demo): the live-demo view for three Serranodes on a taped triangle. A call is located
-// by loudness trilateration (lib/venue.ts) and drawn on a floor plan of the triangle.
+// Venue demo (/demo): the live-demo view for three Serranodes on a taped triangle. Detect-only: a
+// call shows that the nodes heard it, classified it on the device, flooded an alert across the mesh,
+// and that the base station received it. It is not located on the floor.
 //
 // Calls come live from the base-station decoder (serra-base, over the Pi's USB link) once the Live
 // decoder card is connected, or are simulated: click the floor or a taped mark to "blow a whistle"
-// there. With "Show caller" on (rehearsal), the true position is drawn next to the estimate.
+// there (rehearsal without hardware).
 
 import Link from 'next/link';
 import { useEffect } from 'react';
@@ -96,7 +97,7 @@ export function VenueDemo() {
       </header>
       <div className="venue-stage">
         <VenueMap />
-        <aside className="panel venue-side" aria-label="Located call">
+        <aside className="panel venue-side" aria-label="Detected call">
           <ResultCard />
           <LiveCard />
           <SetupCard />

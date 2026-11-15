@@ -1,4 +1,5 @@
-// Venue demo (/demo): three nodes on a taped triangle, calls located by loudness trilateration.
+// Venue demo (/demo): three nodes on a taped triangle. Detect-only: a call is heard, classified on
+// the node, flooded across the mesh and received at the base station, but not located.
 
 import { test, expect } from './fixtures.js';
 
@@ -28,70 +29,66 @@ test('the triangle is 20 ft on each side', async ({ page }) => {
   for (const s of sides) expect(s / FT).toBeCloseTo(20, 5);
 });
 
-test('a call at the centre mark is located within a few feet', async ({ page }) => {
+test('a simulated call is heard, classified, flooded and received', async ({ page }) => {
   await page.locator('[data-mark="X1"]').click();
-  await expect(page.locator('#venue-result')).toContainText('Call located', { timeout: 5_000 });
-  const off = parseFloat(await page.locator('#venue-off').textContent());
-  expect(off).toBeLessThan(3);
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
+    timeout: 5_000,
+  });
+  await expect(page.locator('#venue-steps li[data-state="done"]')).toHaveCount(4);
+  await expect(page.locator('#venue-result .venue-title')).toContainText('Whistle');
   await expect(page.locator('#venue-log li')).toHaveCount(1);
 });
 
-test('every taped mark is located within 3 ft, without noise', async ({ page }) => {
-  await page.getByLabel('Measurement noise').selectOption('0');
-  // X4 is outside the triangle on purpose
-  await page.getByLabel('Callers stand inside the triangle').uncheck();
-  const offs = await page.evaluate(async () => {
-    const results = [];
-    for (const label of ['X1', 'X2', 'X3', 'X4']) {
-      document.querySelector(`[data-mark="${label}"]`).click();
-      await new Promise((r) => setTimeout(r, 50));
-      const c = window.serraVenue.calls[0];
-      results.push(Math.hypot(c.truth.x - c.fix.x, c.truth.y - c.fix.y));
-    }
-    return results;
+test('the steps play out in order: heard, classified, then received', async ({ page }) => {
+  // a call at the far mark takes a moment for the sound to reach every node
+  await page.locator('[data-mark="X4"]').click();
+  await expect(page.locator('#venue-steps li[data-step="heard"]')).toHaveAttribute('data-state', 'done', {
+    timeout: 5_000,
   });
-  for (const m of offs) expect(m / FT).toBeLessThan(3);
+  await expect(page.locator('#venue-steps li[data-step="classified"]')).toHaveAttribute(
+    'data-state',
+    'done',
+    {
+      timeout: 5_000,
+    },
+  );
+  await expect(page.locator('#venue-steps li[data-step="received"]')).toHaveAttribute('data-state', 'done', {
+    timeout: 5_000,
+  });
 });
 
-test('a call on the B–C edge is flagged as two possible spots', async ({ page }) => {
-  await page.getByLabel('Measurement noise').selectOption('0');
-  await page.getByLabel('Callers stand inside the triangle').uncheck();
-  await page.locator('[data-mark="X3"]').click();
-  await expect(page.locator('#venue-result')).toContainText('Two possible spots', { timeout: 5_000 });
-  await expect(page.locator('#venue-ambiguous')).toBeVisible();
-});
-
-test('a 200 ft triangle locates its centre without a false second spot', async ({ page }) => {
-  await page.getByLabel('Measurement noise').selectOption('0');
-  await page.getByLabel('Triangle side (ft)').fill('200');
-  await page.getByRole('button', { name: 'Apply' }).click();
+test('each node reports its class, confidence and hops', async ({ page }) => {
   await page.locator('[data-mark="X1"]').click();
-  await expect(page.locator('#venue-result')).toContainText('Call located', { timeout: 15_000 });
-  const c = await page.evaluate(() => window.serraVenue.calls[0]);
-  expect(Math.hypot(c.truth.x - c.fix.x, c.truth.y - c.fix.y) / FT).toBeLessThan(3);
-  expect(c.fix.alt).toBeNull();
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
+    timeout: 5_000,
+  });
+  const rows = page.locator('#venue-result .venue-readings tbody tr');
+  await expect(rows).toHaveCount(3);
+  for (let i = 0; i < 3; i++) {
+    await expect(rows.nth(i)).toContainText('whistle');
+    await expect(rows.nth(i)).toContainText('%');
+    await expect(rows.nth(i)).toContainText(/direct|hop/);
+  }
 });
 
-test('with callers inside the triangle, noisy calls near a node stay inside it', async ({ page }) => {
-  await page.getByLabel('Measurement noise').selectOption('2');
-  const offs = await page.evaluate(async () => {
-    const results = [];
-    for (let i = 0; i < 12; i++) {
-      document.querySelector('[data-mark="X2"]').click();
-      await new Promise((r) => setTimeout(r, 30));
-      const c = window.serraVenue.calls[0];
-      results.push(Math.hypot(c.truth.x - c.fix.x, c.truth.y - c.fix.y));
-    }
-    return results;
+test('calls are not located on the floor', async ({ page }) => {
+  await page.locator('[data-mark="X2"]').click();
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
+    timeout: 5_000,
   });
-  for (const m of offs) expect(m / FT).toBeLessThan(4);
+  await expect(page.locator('#venue-est')).toHaveCount(0);
+  await expect(page.locator('#venue-radius')).toHaveCount(0);
+  const c = await page.evaluate(() => window.serraVenue.calls[0]);
+  expect(c.fix).toBeUndefined();
 });
 
 test('clicking the floor simulates a call there', async ({ page }) => {
   const box = await page.locator('#venue-map canvas').boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(page.locator('#venue-log li')).toHaveCount(1);
-  await expect(page.locator('#venue-result')).toContainText('Call located', { timeout: 5_000 });
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
+    timeout: 5_000,
+  });
 });
 
 test('the triangle size can be changed, and bad input is rejected', async ({ page }) => {

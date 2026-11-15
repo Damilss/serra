@@ -1,6 +1,7 @@
 'use client';
 
-// Floor plan of the venue triangle. Click the floor (or a taped mark below it) to simulate a call there.
+// Floor plan of the venue triangle. Click the floor (or a taped mark below it) to simulate a call there;
+// while connected to the live decoder, clicks do nothing: only real alerts appear, with no caller drawn.
 
 import { useEffect, useRef } from 'react';
 import { createVenueRenderer } from '@/lib/draw/venue';
@@ -13,6 +14,7 @@ export function VenueMap() {
   const rendererRef = useRef<ReturnType<typeof createVenueRenderer> | null>(null);
   const layout = useVenue((s) => s.layout);
   const simulateAt = useVenue((s) => s.simulateAt);
+  const liveOn = useVenue((s) => s.liveOn);
 
   useEffect(() => {
     const box = boxRef.current!;
@@ -49,7 +51,9 @@ export function VenueMap() {
     <section className="card venue-map-card" aria-labelledby="venue-h">
       <div className="card-head">
         <h3 id="venue-h">Venue floor</h3>
-        <span className="label">Click the floor to simulate a call</span>
+        <span className="label" id="venue-hint">
+          {liveOn ? 'Listening for live calls' : 'Click the floor to simulate a call'}
+        </span>
       </div>
       <div className="venue-map" id="venue-map" ref={boxRef}>
         <canvas
@@ -69,7 +73,13 @@ export function VenueMap() {
       <div className="venue-marks">
         <span className="label">Taped marks</span>
         {layout.marks.map((m) => (
-          <button key={m.label} className="btn" data-mark={m.label} onClick={() => simulateAt(m)}>
+          <button
+            key={m.label}
+            className="btn"
+            data-mark={m.label}
+            disabled={liveOn}
+            onClick={() => simulateAt(m)}
+          >
             {m.label} · {m.name}
           </button>
         ))}

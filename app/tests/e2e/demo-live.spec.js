@@ -5,8 +5,6 @@
 import http from 'node:http';
 import { test, expect } from './fixtures.js';
 
-const FT = 0.3048;
-
 async function startDecoder() {
   const clients = new Set();
   let seq = 0;
@@ -36,8 +34,11 @@ async function startDecoder() {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const url = `http://127.0.0.1:${server.address().port}`;
 
-  /** One ALERT from node `src` at `peak` tenths of a dB, `dt` ms of Pi time after the last one. */
-  const alert = (src, peak, cls = 'whistle', dt = 100) => {
+  /**
+   * One ALERT from node `src` at `peak` tenths of a dB, `dt` ms of Pi time after the last one, that
+   * reached the base station after `hops` relays.
+   */
+  const alert = (src, peak, cls = 'whistle', dt = 100, hops = 0) => {
     seq++;
     t += dt;
     const e = {
@@ -50,8 +51,8 @@ async function startDecoder() {
       src,
       dst: 65535,
       msg_id: seq,
-      ttl: 4,
-      hops: 0,
+      ttl: 4 - hops,
+      hops,
       type: 'ALERT',
       alert: {
         class: cls,
@@ -95,36 +96,33 @@ test.afterEach(async () => {
   await dec.close();
 });
 
-test('three nodes reporting a whistle are located on the floor', async ({ page }) => {
+test('three nodes reporting a whistle show it heard, classified, flooded and received', async ({ page }) => {
   await expect(page.locator('#venue-health')).toContainText('source ble');
   const ids = [0x1c4e, 0x2a10, 0x3b7f];
   const peaks = await levelsAt(page, 'X2');
   ids.forEach((id, i) => dec.alert(id, peaks[i]));
-  // X2 sits near node A, where three readings can fit a second spot too: either verdict is fine
-  await expect(page.locator('#venue-result')).toContainText(/Call located|Two possible spots/, {
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
     timeout: 5_000,
   });
+  await expect(page.locator('#venue-steps li[data-state="done"]')).toHaveCount(4);
+  await expect(page.locator('#venue-steps li[data-step="heard"]')).toContainText('by 3 of 3 nodes');
+  await expect(page.locator('#venue-steps li[data-step="classified"]')).toContainText('Whistle, 90%');
   await expect(page.locator('#venue-source')).toHaveText('Live · Whistle');
   await expect(page.locator('#venue-log li[data-source="live"]')).toHaveCount(1);
-
-  const off = await page.evaluate(() => {
-    const c = window.serraVenue.calls[0];
-    const m = window.serraVenue.layout.marks.find((x) => x.label === 'X2');
-    return Math.hypot(c.fix.x - m.x, c.fix.y - m.y);
-  });
-  expect(off / FT).toBeLessThan(1.5);
 });
 
 test('new Serranodes fill the corners in the order they are first heard', async ({ page }) => {
   const peaks = await levelsAt(page, 'X1');
   [0x0b16, 0x0c01, 0x0d02].forEach((id, i) => dec.alert(id, peaks[i]));
-  await expect(page.locator('#venue-result')).toContainText('Call located', { timeout: 5_000 });
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
+    timeout: 5_000,
+  });
   await expect(page.getByLabel('Node at corner A')).toHaveValue(String(0x0b16));
   await expect(page.getByLabel('Node at corner B')).toHaveValue(String(0x0c01));
   await expect(page.getByLabel('Node at corner C')).toHaveValue(String(0x0d02));
 });
 
-test('alerts more than 2 s apart are separate calls, and a call two nodes missed is not located', async ({
+test('alerts more than 2 s apart are separate calls, and one node is enough to reach the base', async ({
   page,
 }) => {
   const peaks = await levelsAt(page, 'X1');
@@ -132,35 +130,46 @@ test('alerts more than 2 s apart are separate calls, and a call two nodes missed
   dec.later();
   dec.alert(0x2a10, peaks[1], 'scream');
   await expect(page.locator('#venue-log li')).toHaveCount(2, { timeout: 6_000 });
-  await expect(page.locator('#venue-result')).toContainText('Heard by B only', { timeout: 5_000 });
-  await expect(page.locator('#venue-partial')).toContainText('near node B');
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
+    timeout: 5_000,
+  });
+  await expect(page.locator('#venue-steps li[data-step="heard"]')).toContainText('by 1 of 3 nodes (B)');
+  await expect(page.locator('#venue-partial')).toContainText('Only one node');
   await expect(page.locator('#venue-source')).toHaveText('Live · Scream');
 });
 
-test('calibrating at the centre evens out the microphones', async ({ page }) => {
-  const ids = [0x1c4e, 0x2a10, 0x3b7f];
-  const skew = [0, 30, -20]; // B reads 3 dB hot, C 2 dB quiet
+test('hops from the decoder are shown', async ({ page }) => {
   const peaks = await levelsAt(page, 'X1');
-  ids.forEach((id, i) => dec.alert(id, peaks[i] + skew[i]));
-  await expect(page.locator('#venue-result')).toContainText(/Call located|Two possible spots/, {
+  dec.alert(0x3b7f, peaks[2], 'help', 100, 1);
+  await expect(page.locator('#venue-stage')).toContainText('Received at the base station', {
     timeout: 5_000,
   });
-  await page.locator('#venue-calibrate').click();
-  await expect(page.getByText('Calibrated from the last live call.')).toBeVisible();
-  const offsets = await page.locator('#venue-nodes tbody tr td:last-child').allTextContents();
-  expect(offsets).toEqual(['+0.3 dB', '-2.7 dB', '+2.3 dB']);
+  await expect(page.locator('#venue-steps li[data-step="received"]')).toContainText('1 hop');
+  await expect(page.locator('#venue-source')).toHaveText('Live · Help');
+});
 
-  // the same uneven microphones, now from mark X2: calibrated, it lands on X2
-  dec.later();
-  const p2 = await levelsAt(page, 'X2');
-  ids.forEach((id, i) => dec.alert(id, p2[i] + skew[i]));
-  await expect(page.locator('#venue-log li')).toHaveCount(2, { timeout: 5_000 });
-  const off = await page.evaluate(() => {
-    const c = window.serraVenue.calls[0];
-    const m = window.serraVenue.layout.marks.find((x) => x.label === 'X2');
-    return Math.hypot(c.fix.x - m.x, c.fix.y - m.y);
-  });
-  expect(off / FT).toBeLessThan(1.5);
+test('while live, clicking the floor or a mark adds no call and no caller', async ({ page }) => {
+  await expect(page.locator('#venue-hint')).toHaveText('Listening for live calls');
+  await expect(page.locator('[data-mark="X1"]')).toBeDisabled();
+  const box = await page.locator('#venue-map canvas').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => window.serraVenue.calls.length)).toBe(0);
+  // a real alert still comes through, with no caller position
+  const peaks = await levelsAt(page, 'X1');
+  dec.alert(0x1c4e, peaks[0]);
+  await expect(page.locator('#venue-log li')).toHaveCount(1, { timeout: 5_000 });
+  expect(await page.evaluate(() => window.serraVenue.calls[0].truth)).toBeNull();
+});
+
+test('going live clears rehearsal calls, so no simulated caller stays on the floor', async ({ page }) => {
+  await page.getByRole('button', { name: 'Disconnect' }).click();
+  await page.locator('[data-mark="X1"]').click();
+  await expect(page.locator('#venue-log li')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Connect' }).click();
+  await expect(page.locator('#venue-link')).toContainText('Live');
+  expect(await page.evaluate(() => window.serraVenue.calls.length)).toBe(0);
+  await expect(page.locator('#venue-result')).toContainText('No calls yet');
 });
 
 test('disconnecting goes back to simulated calls', async ({ page }) => {

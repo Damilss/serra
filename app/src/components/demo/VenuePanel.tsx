@@ -1,69 +1,109 @@
 'use client';
 
-// Side panel of the venue demo: the located call (estimate, uncertainty, each node's reading against
-// the fit), the live decoder link, the setup for the venue, and the log of calls.
+// Side panel of the venue demo: the detected call (heard → classified on the node → flooded across the
+// mesh → received at the base station, with each node's report), the live decoder link, the setup for
+// the venue, and the log of calls. Detect-only: calls are not located on the floor.
 
 import { useEffect, useState } from 'react';
 import { LOCAL_URL, PI_URL, normaliseUrl } from '@/lib/decoder';
 import { callTimeline } from '@/lib/draw/venue';
 import { hex4, hms, now } from '@/lib/format';
-import { dist, toFt } from '@/lib/venue';
 import { useVenue, type VenueCall } from '@/lib/venueStore';
 
-/** True once the call's fix should be on screen (after the sound and the relay, as on the map). */
-function useRevealed(call: VenueCall | undefined) {
+/** Seconds since the latest call started; re-renders while its animation is still running. */
+function useCallClock(call: VenueCall | undefined) {
   const layout = useVenue((s) => s.layout);
-  const [revealedId, setRevealedId] = useState<number | null>(null);
+  const [, tick] = useState(0);
   useEffect(() => {
     if (!call) return;
-    const wait = Math.max(0, callTimeline(layout, call).fixAt - (now() - call.t0));
-    const id = setTimeout(() => setRevealedId(call.id), wait * 1000);
-    return () => clearTimeout(id);
+    const end = callTimeline(layout, call).doneAt;
+    const id = setInterval(() => {
+      tick((n) => n + 1);
+      if (!Number.isFinite(end) || now() - call.t0 > end) clearInterval(id);
+    }, 100);
+    return () => clearInterval(id);
   }, [call, layout]);
-  return !!call && revealedId === call.id;
+  return call ? now() - call.t0 : -1;
 }
 
-const ft = (m: number) => `${toFt(m).toFixed(1)} ft`;
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const pct = (c: number | null) => (c === null ? '—' : `${Math.round(c * 100)}%`);
+const hopText = (h: number) => (h === 0 ? 'direct' : `${h} hop${h === 1 ? '' : 's'}`);
+
+type StepState = 'done' | 'active' | 'pending';
 
 export function ResultCard() {
   const layout = useVenue((s) => s.layout);
   const call = useVenue((s) => s.calls[0]);
-  const revealed = useRevealed(call);
+  const e = useCallClock(call);
 
   if (!call) {
     return (
-      <div className="venue-block">
+      <div className="venue-block" id="venue-result">
         <span className="pill">
           <i />
           <span>Listening</span>
         </span>
         <h2 className="venue-title">No calls yet</h2>
         <p className="venue-note">
-          Blow a whistle near the triangle, or click the floor to simulate one. All three Serranodes report
-          how loud they heard it, and the base station works out where it came from.
+          Blow a whistle near a Serranode, or click the floor to simulate one. Each node that hears it
+          classifies the sound on the device and floods an alert across the mesh to the base station.
         </p>
       </div>
     );
   }
 
-  const { fix, levels } = call;
+  const tl = callTimeline(layout, call);
+  const { levels } = call;
   const heardBy = layout.nodes.filter((_, i) => levels[i] !== null).map((n) => n.label);
   const top = Math.max(...levels.map((l) => l ?? -Infinity));
   const loudest = levels.indexOf(top);
-  const off = call.truth && fix ? dist(call.truth, fix) : null;
-  const pill = !revealed
-    ? 'Locating…'
-    : !fix
-      ? `Heard by ${heardBy.join(' + ')} only`
-      : fix.alt
-        ? 'Two possible spots'
-        : 'Call located';
+  const conf = loudest >= 0 ? call.confidence[loudest] : null;
+  const hops = call.hops.filter((h): h is number => h !== null);
+  const fewestHops = hops.length ? Math.min(...hops) : null;
+
+  // 0 listening · 1 heard · 2 classified, flooding · 3 received at the base station
+  const stage = e >= tl.receivedAt ? 3 : e >= tl.firstClassifiedAt ? 2 : e >= tl.firstHeardAt ? 1 : 0;
+  const state = (doneAt: number, activeAt: number): StepState =>
+    stage >= doneAt ? 'done' : stage >= activeAt ? 'active' : 'pending';
+  const pill = ['Listening…', 'Heard', 'Classified · flooding the mesh', 'Received at the base station'][
+    stage
+  ];
+
+  const steps: { key: string; state: StepState; title: string; detail: string }[] = [
+    {
+      key: 'heard',
+      state: state(1, 0),
+      title: 'Heard',
+      detail: `by ${heardBy.length} of ${layout.nodes.length} nodes (${heardBy.join(', ')})`,
+    },
+    {
+      key: 'classified',
+      state: state(2, 1),
+      title: 'Classified on the node',
+      detail: `${capital(call.cls)}, ${pct(conf)} confident · no internet`,
+    },
+    {
+      key: 'flooded',
+      state: state(3, 2),
+      title: 'Flooded across the mesh',
+      detail: `${heardBy.length} alert${heardBy.length === 1 ? '' : 's'}, relayed node to node over BLE`,
+    },
+    {
+      key: 'received',
+      state: state(3, 3),
+      title: 'Received by the base station',
+      detail:
+        fewestHops === null
+          ? 'decoded on the Raspberry Pi'
+          : `decoded on the Raspberry Pi · ${hopText(fewestHops)}`,
+    },
+  ];
 
   return (
     <div className="venue-block" id="venue-result">
       <div className="venue-row">
-        <span className={`pill ${revealed && fix ? 'alert' : ''}`}>
+        <span className={`pill ${stage === 3 ? 'alert' : ''}`} id="venue-stage">
           <i />
           <span>{pill}</span>
         </span>
@@ -71,74 +111,51 @@ export function ResultCard() {
           {call.source === 'live' ? 'Live' : 'Simulated'} · {capital(call.cls)}
         </span>
       </div>
-      <h2 className="venue-title">
-        {!revealed ? 'Listening to all three nodes' : fix ? `Within ±${ft(fix.r)}` : 'Not located'}
-      </h2>
-      {revealed && !fix && (
-        <p className="venue-note" id="venue-partial">
-          Only {heardBy.length === 1 ? 'one node' : 'two nodes'} reported this call, and locating it needs all
-          three. {heardBy.length === 1 && `It was near node ${heardBy[0]}. `}Try again a little louder, or
-          closer to the middle of the triangle.
-        </p>
-      )}
-      {revealed && fix?.alt && (
-        <p className="venue-note" id="venue-ambiguous">
-          The readings fit a second spot about as well ({ft(fix.alt.x)}, {ft(fix.alt.y)}), marked “or here?”
-          on the map. With three nodes this happens near an edge or a node; a fourth node would settle it.
-        </p>
-      )}
-      {fix && (
-        <dl className="venue-stats">
-          <div>
-            <dt className="label">Estimate</dt>
-            <dd id="venue-est">{revealed ? `${ft(fix.x)}, ${ft(fix.y)}` : '—'}</dd>
-          </div>
-          <div>
-            <dt className="label">Search circle</dt>
-            <dd id="venue-radius">{revealed ? `±${ft(fix.r)}` : '—'}</dd>
-          </div>
-          {off !== null && (
-            <div>
-              <dt className="label">Off by</dt>
-              <dd id="venue-off">{revealed ? ft(off) : '—'}</dd>
-            </div>
-          )}
-          <div>
-            <dt className="label">Call level at 1 m</dt>
-            <dd>{revealed ? `${fix.l0.toFixed(1)} dB` : '—'}</dd>
-          </div>
-        </dl>
-      )}
+      <h2 className="venue-title">{stage < 2 ? 'Listening…' : `${capital(call.cls)} · ${pct(conf)}`}</h2>
+      <ol className="venue-steps" id="venue-steps">
+        {steps.map((s) => (
+          <li key={s.key} data-step={s.key} data-state={s.state}>
+            <b>{s.title}</b>
+            <small>{s.state === 'pending' ? '…' : s.detail}</small>
+          </li>
+        ))}
+      </ol>
       <table className="venue-readings">
         <thead>
           <tr>
             <th>Node</th>
             <th>Heard</th>
-            <th>Fit</th>
-            <th>Distance</th>
+            <th>Class</th>
+            <th>Conf.</th>
+            <th>Hops</th>
           </tr>
         </thead>
         <tbody>
           {layout.nodes.map((n, i) => {
             const lv = levels[i];
+            const reported = lv !== null;
+            const h = call.hops[i];
             return (
               <tr key={n.label} className={i === loudest ? 'loudest' : undefined}>
                 <td>
                   {n.label} <small>{hex4(n.nodeId)}</small>
                 </td>
-                <td>{lv === null ? 'no report' : `${lv.toFixed(1)} dB`}</td>
-                <td>{revealed && fix ? `${fix.predicted[i].toFixed(1)} dB` : '—'}</td>
-                <td>{revealed && fix ? ft(dist(n, fix)) : '—'}</td>
+                <td>{reported ? `${lv.toFixed(1)} dB` : 'no report'}</td>
+                <td>{reported && stage >= 2 ? (call.classes[i] ?? '—') : '—'}</td>
+                <td>{reported && stage >= 2 ? pct(call.confidence[i]) : '—'}</td>
+                <td>{reported && stage >= 3 && h !== null ? hopText(h) : '—'}</td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <p className="venue-note">
-        {loudest >= 0 && `Node ${layout.nodes[loudest].label} heard it loudest. `}
-        Each node&apos;s level is compared with how loud the call would be from every spot on the floor; the
-        estimate is the spot that explains all three best.
-      </p>
+      {heardBy.length < layout.nodes.length && (
+        <p className="venue-note" id="venue-partial">
+          {heardBy.length === 1 ? 'Only one node' : 'Only some nodes'} reported this call. It still reached
+          the base station: one node is enough to raise the alarm.
+        </p>
+      )}
+      {loudest >= 0 && <p className="venue-note">Node {layout.nodes[loudest].label} heard it loudest.</p>}
     </div>
   );
 }
@@ -150,12 +167,11 @@ const LINK_TEXT = {
   down: 'Lost, retrying every 2 s',
 } as const;
 
-/** Connection to the base-station decoder, which node is at which corner, and calibration. */
+/** Connection to the base-station decoder, and which node is at which corner. */
 export function LiveCard() {
   const s = useVenue();
   const [url, setUrl] = useState(s.decoderUrl);
   const [error, setError] = useState('');
-  const [calMsg, setCalMsg] = useState('');
   // re-render once a second so "last packet N s ago" stays current
   const [, tick] = useState(0);
   useEffect(() => {
@@ -240,7 +256,6 @@ export function LiveCard() {
             <th>Corner</th>
             <th>Mesh ID</th>
             <th>Last heard</th>
-            <th>Calibration</th>
           </tr>
         </thead>
         <tbody>
@@ -265,7 +280,6 @@ export function LiveCard() {
                   {!s.assigned[i] && <small> default</small>}
                 </td>
                 <td>{seen ? `${(seen.peak / 10).toFixed(1)} dB` : '—'}</td>
-                <td>{`${s.offsets[i] >= 0 ? '+' : ''}${s.offsets[i].toFixed(1)} dB`}</td>
               </tr>
             );
           })}
@@ -273,37 +287,13 @@ export function LiveCard() {
       </table>
       <p className="venue-note">
         New Serranodes fill the corners in the order they&apos;re first heard. To check which is which,
-        whistle right next to one corner: it should read loudest. To even out the microphones, whistle at X1
-        (the centre), then press Calibrate.
+        whistle right next to one: it should read loudest.
       </p>
       <div className="venue-row">
-        <button
-          className="btn"
-          id="venue-calibrate"
-          onClick={() =>
-            setCalMsg(
-              s.calibrate()
-                ? 'Calibrated from the last live call.'
-                : 'Needs a live call heard by all three nodes first.',
-            )
-          }
-        >
-          Calibrate at X1
-        </button>
-        <button
-          className="btn ghost"
-          onClick={() => {
-            s.resetCalibration();
-            setCalMsg('');
-          }}
-        >
-          Reset calibration
-        </button>
         <button className="btn ghost" onClick={s.resetNodeIds}>
           Reset IDs
         </button>
       </div>
-      {calMsg && <span className="venue-note">{calMsg}</span>}
     </div>
   );
 }
@@ -312,8 +302,7 @@ export function SetupCard() {
   const sideFt = useVenue((s) => s.layout.sideFt);
   const showTruth = useVenue((s) => s.showTruth);
   const jitterDb = useVenue((s) => s.jitterDb);
-  const insideOnly = useVenue((s) => s.insideOnly);
-  const { setSideFt, setShowTruth, setJitter, setInsideOnly, clear } = useVenue.getState();
+  const { setSideFt, setShowTruth, setJitter, clear } = useVenue.getState();
   const [side, setSide] = useState(String(sideFt));
   const [error, setError] = useState('');
 
@@ -352,11 +341,7 @@ export function SetupCard() {
       </form>
       <label className="venue-check">
         <input type="checkbox" checked={showTruth} onChange={(e) => setShowTruth(e.target.checked)} />
-        Show where the caller really was (rehearsal)
-      </label>
-      <label className="venue-check">
-        <input type="checkbox" checked={insideOnly} onChange={(e) => setInsideOnly(e.target.checked)} />
-        Callers stand inside the triangle
+        Mark where a simulated caller stood
       </label>
       <label className="venue-check">
         Measurement noise
@@ -381,17 +366,22 @@ export function CallLog() {
     <div className="venue-block">
       <span className="label">Calls · {calls.length}</span>
       <ul className="venue-log" id="venue-log">
-        {calls.map((c) => (
-          <li key={c.id} data-source={c.source}>
-            <span>{hms(c.wall)}</span>
-            <span>{c.fix ? `±${toFt(c.fix.r).toFixed(1)} ft` : 'not located'}</span>
-            <span>
-              {c.truth && c.fix
-                ? `off ${toFt(dist(c.truth, c.fix)).toFixed(1)} ft`
-                : `${c.source} · ${c.cls}`}
-            </span>
-          </li>
-        ))}
+        {calls.map((c) => {
+          const heard = c.levels.filter((l) => l !== null).length;
+          const top = Math.max(...c.levels.map((l) => l ?? -Infinity));
+          const conf = c.confidence[c.levels.indexOf(top)] ?? null;
+          return (
+            <li key={c.id} data-source={c.source}>
+              <span>{hms(c.wall)}</span>
+              <span>
+                {capital(c.cls)} {pct(conf)}
+              </span>
+              <span>
+                heard by {heard}/{c.levels.length} · {c.source}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
