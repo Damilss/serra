@@ -8,8 +8,9 @@ import { hms } from '@/lib/format';
 import { FIELD_COUNT } from '@/lib/geo';
 import { useDashboard } from '@/lib/store';
 import { SerraLogo, SerranetMark } from '../brand/Logos';
+import { SiteNav } from '../SiteNav';
 
-function Clock() {
+export function Clock() {
   const [t, setT] = useState('--:--:--');
   useEffect(() => {
     const tick = () => setT(hms(new Date()));
@@ -33,6 +34,7 @@ export function TopBar() {
         <span className="sep" />
         <span className="label">Base station · Ranger Station</span>
       </Link>
+      <SiteNav />
       <div className="chips">
         <span className="chip">
           <SerranetMark />

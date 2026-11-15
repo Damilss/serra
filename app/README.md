@@ -54,12 +54,15 @@ Phones on the same network can then open `http://<laptop-ip>:3000`. Do the `npm 
 
 ## What to try
 
-| Route        | What it is                                                                                |
-| ------------ | ----------------------------------------------------------------------------------------- |
-| `/`          | Welcome screen. **Open base station** plays the loading screen, then opens the dashboard. |
-| `/dashboard` | The dashboard. At phone width (under 640 px) it opens in **rescuer mode**.                |
+| Route        | What it is                                                                                                                                   |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`          | Welcome screen. **Open base station** plays the loading screen, then opens the dashboard.                                                    |
+| `/dashboard` | **Field** view: the production vision, a ranger's view of a wilderness Serranet. At phone width (under 640 px) it opens in **rescuer mode**. |
+| `/demo`      | **Venue demo**: three Serranodes on a taped triangle, calls located by loudness trilateration. See [Venue demo](#venue-demo).                |
 
-On the dashboard:
+The **Field / Venue demo** tabs in the top bar switch between the two.
+
+On the field dashboard:
 
 - **Simulate** (or press `W`) a whistle, scream or "help" at the selected Serranode. The calling node lights up, the sound reaches nearby nodes later and quieter, they confirm it in lighter orange, the alert hops across the Serranet to the base, and the search area narrows onto the loudness-weighted fix.
 - **Alert card:** Locate, Replay, Acknowledge, Resolve.
@@ -67,6 +70,41 @@ On the dashboard:
 - **Alert feed** and **Serranet packets**: the decoded bytes of every heartbeat and alert. Click a packet to pin it.
 - **Switch nodes** with the Viewing dropdown, the arrow buttons, `←` / `→`, or by clicking a node on the map.
 - **Rescuer mode** (top bar): the phone view, with bearing and distance from the ranger station.
+
+## Venue demo
+
+`/demo` is the view for the live hackathon demo: three Serranodes (A, B, C) on an equilateral triangle taped on the floor, 20 ft a side, and the base station off to the side.
+
+**How a call is located (loudness trilateration, [`lib/venue.ts`](src/lib/venue.ts)).** Every node reports how loud it heard the call (`peak_level`). For each spot on a 5 cm grid over the floor, the solver assumes the call came from there:
+
+1. It finds the call level that best explains all three readings, with sound falling off 6 dB per doubling of distance.
+2. It scores how far the readings still are from that model.
+
+The spot with the lowest score is the estimate. The spots that score nearly as well become the search circle. It needs no clock sync, only the peak levels the firmware already sends.
+
+**Two possible spots.** Three loudness readings usually fit two places: the real one, and a "mirror" spot farther from every node, which would need a louder caller. The solver picks the spot that needs the quieter caller. If the mirror spot fits about as well, it says so ("Two possible spots") and marks it "or here?" on the map. That happens near an edge or outside the triangle. A fourth node would settle it.
+
+**Expected accuracy (simulated, 20 ft triangle):**
+
+| Measurement noise                        | Inside the triangle (median error) |
+| ---------------------------------------- | ---------------------------------- |
+| None                                     | under 0.2 ft                       |
+| ±1 dB, a calibrated node in a quiet room | about 1 ft                         |
+| ±2 dB                                    | about 2–3 ft                       |
+
+Outside the triangle, expect several feet of error.
+
+**Using it**
+
+- **Rehearse:** click the floor, or a **Taped mark** button (X1 centre, X2 near A, X3 edge B–C, X4 outside), to simulate a call there.
+- **"Show where the caller really was":** draws the true spot next to the estimate, for rehearsal. Turn it off on stage.
+- **Measurement noise:** sets how much the simulated readings wobble.
+- **Triangle side:** change it if the venue forces a different size.
+
+**For the live demo:**
+
+- Replace the placeholder node IDs in `makeLayout()` (`lib/venue.ts`) with the real ones each Pico prints at boot.
+- Feed real readings to `useVenue.getState().addCall(readings)`. Each reading is `{ node: 0 | 1 | 2, peak: peak_level }`.
 
 ## Project structure
 
@@ -76,6 +114,7 @@ app/
 │   ├── app/                      Next.js App Router
 │   │   ├── layout.tsx            <html>, fonts, global CSS, the loading screen
 │   │   ├── page.tsx              /            → <Welcome />
+│   │   ├── demo/                 /demo        venue demo (same pattern as dashboard/)
 │   │   ├── dashboard/
 │   │   │   ├── page.tsx          /dashboard   (server component: metadata only)
 │   │   │   └── DashboardClient.tsx  loads the dashboard client-side only
@@ -84,19 +123,24 @@ app/
 │   ├── components/
 │   │   ├── Loader.tsx            loading screen between welcome and dashboard
 │   │   ├── brand/                logos (Logos.tsx) and their SVG path data (paths.ts)
+│   │   ├── SiteNav.tsx           Field / Venue demo tabs
 │   │   ├── welcome/              Welcome, WelcomeCanvas (animated topo), BootLog
+│   │   ├── demo/                 VenueDemo (page shell), VenueMap (floor plan), VenuePanel (result, setup, log)
 │   │   └── dashboard/            Dashboard (shell + loops) and one file per panel:
 │   │                             TopBar, Stats, AlertCard, Picker, MapView, ReplayBar,
 │   │                             Feed, PacketView, NodePanel, PicoBoard, Waveform, Rescuer
 │   └── lib/
 │       ├── types.ts              the data contract: nodes, alerts, readings, packets
-│       ├── store.ts              app state and actions (Zustand)
+│       ├── store.ts              field dashboard state and actions (Zustand)
+│       ├── venue.ts              venue triangle layout, call simulator, loudness trilateration
+│       ├── venueStore.ts         venue demo state (layout, located calls)
 │       ├── geo.ts                node layout, mesh links, routing, coordinates, bearings
 │       ├── sound.ts              sound model: dB at distance, wake trigger
 │       ├── alerts.ts             alert classes, the mock alert generator, summary text
 │       ├── packets.ts            Serranet packets byte by byte (firmware wire format)
 │       ├── terrain.ts            fictional terrain and contour drawing
-│       ├── draw/map.ts           the map renderer (canvas)
+│       ├── draw/map.ts           the field map renderer (canvas)
+│       ├── draw/venue.ts         the venue floor-plan renderer (canvas)
 │       ├── brand.ts              brand colors and canvas helpers
 │       ├── format.ts             time, hex and dB formatting, seeded random
 │       ├── audio.ts              the alert chime (Web Audio)
@@ -244,6 +288,8 @@ Mock today:
 **E2E tests** ([`tests/e2e/`](tests/e2e)) cover:
 
 - the welcome and loading screens;
+- the venue demo: the Field / Venue demo tabs, the triangle's size, and the accuracy at each taped mark;
+- that a call outside the triangle gets flagged as two possible spots;
 - the node picker, simulating, acknowledging and resolving alerts, and replay;
 - the packet view's bytes against the firmware's wire format;
 - the sound model (dB levels, falloff, the wake trigger);
