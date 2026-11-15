@@ -29,13 +29,11 @@
 /**
  * LISTEN_CALIB_TARGET_DB_X10 - what the reference tone should read on every node
  *
- * 60.0 dB: roughly what a phone's 1 kHz tone at half a metre really is. was 80.0
- * (README "Peak level and calibration"), which was never measured and made
- * readings about 20 dB too high, e.g. a close whistle showing 138 dB. only the
- * offsets between nodes matter for comparing them; this just makes the
- * absolute numbers believable.
+ * 56.0 dB: what a sound level meter read for the reference tone (1 kHz, 7 in from
+ * the speaker), so peak levels are real dB SPL. was 80.0 (README "Peak level and
+ * calibration"), an unmeasured value that made readings ~20 dB too high.
  */
-#define LISTEN_CALIB_TARGET_DB_X10 600
+#define LISTEN_CALIB_TARGET_DB_X10 560
 
 /**
  * listen_calib_t - one node's peak-level calibration
@@ -54,24 +52,25 @@ typedef struct listen_calib {
 /**
  * calib_table - per-node offsets, measured in the demo room
  *
- * how to measure: build with -DSERRA_LISTEN_DEBUG=ON, play a steady reference
- * tone from a phone at a fixed distance (e.g. 50 cm) and volume in front of
- * each node in turn, and read the "level=" on its debug line. then
- *   new offset = current offset + (LISTEN_CALIB_TARGET_DB_X10 - level)
- * so the tone reads 60.0 dB on every node.
+ * how to measure: build with -DSERRA_LISTEN_DEBUG=ON, play a steady 1 kHz tone at
+ * a fixed volume, measure it with a sound level meter at a fixed distance, then
+ * put each node's mic at exactly that spot in turn and read the "level=" on its
+ * debug line. set LISTEN_CALIB_TARGET_DB_X10 to the meter's reading, and
+ *   new offset = offset it was running + (LISTEN_CALIB_TARGET_DB_X10 - level)
  *
- * measured 2026-11-14: 1 kHz tone from a phone at a fixed volume and distance,
- * median of each node's level readings (spikes dropped). good to about +/- 3 dB:
- *   0x0b16  I2S        median -62.3 dB over 21 readings
- *   0x2d9a  bitstream  median -54.5 dB over two runs; noisiest, ~8 dB spread
- *   0xed70  I2S        median -56.7 dB over 8 readings, 1.6 dB spread
- * re-measure in the demo room if time allows (all nodes in one sitting, phone
- * fixed in place).
+ * the offset belongs to the board + mic pair: if a mic is moved to another
+ * board, recalibrate that board.
+ *
+ * measured 2026-11-15: 1 kHz tone, meter read 56 dB at 7 in; median of each
+ * node's level readings at that spot (spikes dropped), all three on I2S mics:
+ *   0x0b16  79.5 dB with offset 1223, ~1 dB spread  -> 988
+ *   0x2d9a  62.5 dB with offset 1155, ~1 dB spread  -> 1090
+ *   0xed70  68.3 dB with offset 1167, ~2 dB spread  -> 1044
  */
 static const listen_calib_t calib_table[] = {
-	{0x0b16, 1223},
-	{0x2d9a, 1155},
-	{0xed70, 1167},
+	{0x0b16, 988},
+	{0x2d9a, 1090},
+	{0xed70, 1044},
 };
 
 /**
