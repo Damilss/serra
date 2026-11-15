@@ -29,9 +29,13 @@
 /**
  * LISTEN_CALIB_TARGET_DB_X10 - what the reference tone should read on every node
  *
- * 80.0 dB, per README "Peak level and calibration" and the app's dB scale.
+ * 60.0 dB: roughly what a phone's 1 kHz tone at half a metre really is. was 80.0
+ * (README "Peak level and calibration"), which was never measured and made
+ * readings about 20 dB too high, e.g. a close whistle showing 138 dB. only the
+ * offsets between nodes matter for comparing them; this just makes the
+ * absolute numbers believable.
  */
-#define LISTEN_CALIB_TARGET_DB_X10 800
+#define LISTEN_CALIB_TARGET_DB_X10 600
 
 /**
  * listen_calib_t - one node's peak-level calibration
@@ -54,7 +58,7 @@ typedef struct listen_calib {
  * tone from a phone at a fixed distance (e.g. 50 cm) and volume in front of
  * each node in turn, and read the "level=" on its debug line. then
  *   new offset = current offset + (LISTEN_CALIB_TARGET_DB_X10 - level)
- * so the tone reads 80.0 dB on every node.
+ * so the tone reads 60.0 dB on every node.
  *
  * measured 2026-11-14: 1 kHz tone from a phone at a fixed volume and distance,
  * median of each node's level readings (spikes dropped). good to about +/- 3 dB:
@@ -65,9 +69,9 @@ typedef struct listen_calib {
  * fixed in place).
  */
 static const listen_calib_t calib_table[] = {
-	{0x0b16, 1423},
-	{0x2d9a, 1355},
-	{0xed70, 1367},
+	{0x0b16, 1223},
+	{0x2d9a, 1155},
+	{0xed70, 1167},
 };
 
 /**
