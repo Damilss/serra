@@ -35,7 +35,7 @@ The firmware builds on the **Pico SDK 2.3.1** ([design decision 6](../README.md#
 | `classifier/` (`serra_classifier`: microfrontend features + int8 model on TensorFlow Lite Micro) + `tools/classifier_bench` | **Runs on a Pico 2 W**: 70.6 ms per inference, 42.9 KB of a 48 KB arena, ~215 KB flash ([measurements](../docs/classifier-interface.md)). Needs a `pico-tflmicro` checkout ([Prerequisites](#prerequisites)). **Not yet linked into `node.uf2`** |
 | Mic + classifier on the node: `audio/listen.c` (core 1) + `runtime/ipc` (core 1 → core 0) | **Works on 3 × Pico 2 W (2026-11-14)**: each node detects whistle / scream / "help", hands the detection to core 0 and broadcasts it; the other nodes decode it. Mic driver, features, model and TFLM wrapper from PR #5. [Report](../docs/reports/firmware/2026-11-14-mic-classifier-nodes.md) |
 | Peak-level calibration: `calib_table` in `audio/listen.c`, keyed by node ID | **Measured for the 3 demo nodes (2026-11-14)** with a 1 kHz phone tone, good to about ±3 dB ([report](../docs/reports/firmware/2026-11-14-calibration.md)). Re-measure in the demo room if time allows. Build with `-DSERRA_LISTEN_DEBUG=ON` for the level readout |
-| Combined build: mic + classifier + calibration + dedup + tx queue + relaying | Builds with no warnings; **not yet run on hardware** |
+| Combined build: mic + classifier + calibration + dedup + tx queue + relaying | **Runs on 3 × Pico 2 W (2026-11-14)**: test alerts arrive once per node and are relayed once ([report](../docs/reports/firmware/2026-11-14-combined-build.md)). Not yet checked in this build: a real detection through the mesh, a two-hop real detection, the calibrated location check |
 | `runtime/node_state`, `audio/audio.c` | Empty placeholders |
 
 ---
